@@ -1,0 +1,43 @@
+// ─── Color Palette ───────────────────────────────────────────────────────────
+$bg-base:     #06060e;
+$bg-surface:  #0e0e1c;
+$bg-elevated: #161628;
+$bg-hover:    #1e1e36;
+
+$border-subtle:  rgba(255, 255, 255, 0.05);
+$border-default: rgba(255, 255, 255, 0.09);
+$border-strong:  rgba(255, 255, 255, 0.18);
+$border-accent:  rgba(99, 102, 241, 0.45);
+
+// Brand
+$indigo: #6366f1;
+$violet: #8b5cf6;
+$sky:    #22d3ee;
+$emerald: #10b981;
+$amber:   #f59e0b;
+$rose:    #f43f5e;
+
+// Gradients
+$gradient-brand: linear-gradient(135deg, $indigo 0%, $violet 100%);
+$gradient-text:  linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, $sky 100%);
+$gradient-glow:  radial-gradient(circle, rgba($indigo, 0.22) 0%, transparent 70%);
+
+// Text
+$text-primary:   #eeeef8;
+$text-secondary: #9898b8;
+$text-tertiary:  #55556e;
+
+// ─── Shape ───────────────────────────────────────────────────────────────────
+$radius-sm:   6px;
+$radius-md:   10px;
+$radius-lg:   16px;
+$radius-xl:   24px;
+$radius-full: 9999px;
+
+// ─── Shadow ──────────────────────────────────────────────────────────────────
+$shadow-card: 0 4px 32px rgba(0, 0, 0, 0.55);
+$shadow-glow: 0 0 64px rgba($indigo, 0.14);
+
+// ─── Motion ──────────────────────────────────────────────────────────────────
+$ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+$transition: all 0.2s $ease-out;

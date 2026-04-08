@@ -1,0 +1,222 @@
+@use '../styles/variables' as *;
+
+.login-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: $bg-base;
+  overflow: hidden;
+
+  &__bg { position: absolute; inset: 0; pointer-events: none; }
+
+  &__orb {
+    position: absolute;
+    border-radius: 50%;
+    animation: pulse-glow 6s ease-in-out infinite;
+
+    &--1 {
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba($indigo, 0.16) 0%, transparent 65%);
+      top: -200px;
+      right: -100px;
+    }
+
+    &--2 {
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba($violet, 0.12) 0%, transparent 65%);
+      bottom: -100px;
+      left: -80px;
+      animation-delay: 3s;
+    }
+  }
+
+  &__grid {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    background-size: 36px 36px;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
+  }
+}
+
+.login-card {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: $bg-surface;
+  border: 1px solid $border-default;
+  border-radius: $radius-xl;
+  padding: 40px;
+  box-shadow: $shadow-card, $shadow-glow;
+  animation: fadeUp 0.6s $ease-out both;
+
+  &__logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: $text-primary;
+    text-decoration: none;
+    margin-bottom: 32px;
+    transition: $transition;
+
+    .material-icons {
+      font-size: 20px;
+      background: $gradient-brand;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    &:hover { opacity: 0.8; }
+  }
+
+  &__title {
+    font-size: 1.625rem;
+    font-weight: 800;
+    color: $text-primary;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+  }
+
+  &__sub {
+    font-size: 0.9375rem;
+    color: $text-secondary;
+    margin-bottom: 32px;
+  }
+
+  &__back {
+    margin-top: 24px;
+    text-align: center;
+
+    a {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.8125rem;
+      color: $text-tertiary;
+      text-decoration: none;
+      transition: $transition;
+
+      .material-icons { font-size: 14px; }
+
+      &:hover { color: $text-secondary; }
+    }
+  }
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  &__field { display: flex; flex-direction: column; gap: 8px; }
+
+  &__label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    letter-spacing: 0.02em;
+  }
+
+  &__input-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    .material-icons {
+      position: absolute;
+      left: 14px;
+      font-size: 18px;
+      color: $text-tertiary;
+      pointer-events: none;
+    }
+  }
+
+  &__input {
+    width: 100%;
+    padding: 12px 14px 12px 44px;
+    background: $bg-elevated;
+    border: 1px solid $border-default;
+    border-radius: $radius-md;
+    font-size: 0.9375rem;
+    color: $text-primary;
+    outline: none;
+    transition: $transition;
+    font-family: inherit;
+
+    &::placeholder { color: $text-tertiary; }
+
+    &:focus {
+      border-color: $indigo;
+      background: $bg-hover;
+      box-shadow: 0 0 0 3px rgba($indigo, 0.12);
+    }
+  }
+
+  &__error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    background: rgba($rose, 0.08);
+    border: 1px solid rgba($rose, 0.25);
+    border-radius: $radius-md;
+    font-size: 0.875rem;
+    color: $rose;
+
+    .material-icons { font-size: 16px; }
+  }
+
+  &__submit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 13px;
+    background: $gradient-brand;
+    color: #fff;
+    border: none;
+    border-radius: $radius-md;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: $transition;
+    box-shadow: 0 0 24px rgba($indigo, 0.3);
+    margin-top: 4px;
+
+    .material-icons { font-size: 18px; }
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 0 36px rgba($indigo, 0.45);
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+  }
+
+  &__spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

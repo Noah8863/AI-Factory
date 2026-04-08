@@ -1,0 +1,530 @@
+@use '../styles/variables' as *;
+
+// ─── Layout ──────────────────────────────────────────────────────────────────
+
+.dashboard {
+  display: flex;
+  min-height: 100vh;
+  background: $bg-base;
+  color: $text-primary;
+}
+
+// ─── Sidebar ─────────────────────────────────────────────────────────────────
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 240px;
+  background: $bg-surface;
+  border-right: 1px solid $border-subtle;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 16px;
+  z-index: 50;
+
+  &__logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: $text-primary;
+    text-decoration: none;
+    padding: 8px 12px;
+    margin-bottom: 28px;
+    border-radius: $radius-md;
+    transition: $transition;
+
+    .material-icons {
+      font-size: 20px;
+      background: $gradient-brand;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    &:hover { background: $bg-elevated; }
+  }
+
+  &__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $text-secondary;
+    background: transparent;
+    border: none;
+    border-radius: $radius-md;
+    cursor: pointer;
+    text-align: left;
+    transition: $transition;
+    position: relative;
+
+    .material-icons { font-size: 18px; }
+
+    &:hover {
+      background: $bg-elevated;
+      color: $text-primary;
+    }
+
+    &--active {
+      background: rgba($indigo, 0.12);
+      color: #a5b4fc;
+
+      .material-icons { color: $indigo; }
+
+      &:hover { background: rgba($indigo, 0.16); }
+    }
+  }
+
+  &__badge {
+    margin-left: auto;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background: rgba($indigo, 0.2);
+    color: #a5b4fc;
+    border-radius: $radius-full;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border-top: 1px solid $border-subtle;
+    margin-top: 16px;
+  }
+
+  &__user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: $gradient-brand;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  &__username {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $text-secondary;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__logout {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: 1px solid $border-subtle;
+    border-radius: $radius-md;
+    cursor: pointer;
+    color: $text-tertiary;
+    transition: $transition;
+    flex-shrink: 0;
+
+    .material-icons { font-size: 16px; }
+
+    &:hover {
+      color: $rose;
+      border-color: rgba($rose, 0.3);
+      background: rgba($rose, 0.06);
+    }
+  }
+}
+
+// ─── Main content ─────────────────────────────────────────────────────────────
+
+.dashboard__main {
+  margin-left: 240px;
+  flex: 1;
+  padding: 40px 48px;
+  min-height: 100vh;
+
+  @media (max-width: 768px) {
+    margin-left: 0;
+    padding: 24px 20px;
+  }
+}
+
+// ─── Shared panel header ─────────────────────────────────────────────────────
+
+.idea-panel,
+.history-panel {
+  max-width: 820px;
+
+  &__header {
+    margin-bottom: 32px;
+  }
+}
+
+.idea-panel__title {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: $text-primary;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+.idea-panel__sub {
+  font-size: 0.9375rem;
+  color: $text-secondary;
+  line-height: 1.65;
+}
+
+// ─── Templates ───────────────────────────────────────────────────────────────
+
+.templates {
+  margin-bottom: 20px;
+
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: $text-tertiary;
+    margin-bottom: 12px;
+
+    .material-icons { font-size: 14px; color: $amber; }
+  }
+
+  &__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+.template-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  border-radius: $radius-full;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: $transition;
+  font-family: inherit;
+
+  .material-icons { font-size: 14px; }
+
+  &:hover {
+    background: rgba($indigo, 0.1);
+    border-color: $border-accent;
+    color: #a5b4fc;
+  }
+}
+
+// ─── Idea input ──────────────────────────────────────────────────────────────
+
+.idea-input {
+  background: $bg-surface;
+  border: 1px solid $border-default;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  transition: $transition;
+  margin-bottom: 20px;
+
+  &:focus-within {
+    border-color: $border-accent;
+    box-shadow: 0 0 0 3px rgba($indigo, 0.1);
+  }
+
+  &__textarea {
+    display: block;
+    width: 100%;
+    min-height: 280px;
+    padding: 24px;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    color: $text-primary;
+    line-height: 1.75;
+    resize: vertical;
+
+    &::placeholder { color: $text-tertiary; }
+  }
+
+  &__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-top: 1px solid $border-subtle;
+    background: $bg-elevated;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  &__chars {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+
+    &--default { color: $text-tertiary; }
+    &--amber   { color: $amber; }
+    &--rose    { color: $rose; }
+  }
+
+  &__autosave {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: $text-tertiary;
+
+    .material-icons { font-size: 14px; color: $emerald; }
+  }
+
+  &__submit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    background: $gradient-brand;
+    color: #fff;
+    border: none;
+    border-radius: $radius-full;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: $transition;
+    box-shadow: 0 0 20px rgba($indigo, 0.28);
+
+    .material-icons { font-size: 16px; }
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 0 32px rgba($indigo, 0.45);
+    }
+
+    &:disabled { opacity: 0.55; cursor: not-allowed; }
+  }
+
+  &__spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+// ─── Error ───────────────────────────────────────────────────────────────────
+
+.idea-panel__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba($rose, 0.07);
+  border: 1px solid rgba($rose, 0.22);
+  border-radius: $radius-md;
+  font-size: 0.875rem;
+  color: $rose;
+  margin-bottom: 20px;
+
+  .material-icons { font-size: 18px; }
+}
+
+// ─── Tips ────────────────────────────────────────────────────────────────────
+
+.tips {
+  padding: 20px;
+  background: $bg-surface;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-lg;
+
+  &__heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    margin-bottom: 14px;
+
+    .material-icons { font-size: 16px; color: $amber; }
+  }
+
+  &__list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    li {
+      font-size: 0.875rem;
+      color: $text-tertiary;
+      line-height: 1.6;
+      padding-left: 16px;
+      position: relative;
+
+      &::before {
+        content: '—';
+        position: absolute;
+        left: 0;
+        color: $text-tertiary;
+      }
+
+      strong { color: $text-secondary; font-weight: 600; }
+    }
+  }
+}
+
+// ─── History panel ───────────────────────────────────────────────────────────
+
+.history-panel__loading {
+  display: flex;
+  justify-content: center;
+  padding: 60px;
+
+  span {
+    border: 2px solid $border-default;
+    border-top-color: $indigo;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+}
+
+.history-panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 80px 0;
+  color: $text-tertiary;
+
+  .material-icons { font-size: 48px; }
+
+  p { font-size: 0.9375rem; }
+}
+
+.ideas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.idea-card {
+  padding: 20px 24px;
+  background: $bg-surface;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-lg;
+  transition: $transition;
+
+  &:hover {
+    background: $bg-elevated;
+    border-color: $border-default;
+    transform: translateY(-2px);
+    box-shadow: $shadow-card;
+  }
+
+  &__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    gap: 12px;
+  }
+
+  &__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: $radius-full;
+    font-size: 0.75rem;
+    font-weight: 600;
+
+    .material-icons { font-size: 13px; }
+
+    &--amber {
+      background: rgba($amber, 0.1);
+      color: $amber;
+      border: 1px solid rgba($amber, 0.25);
+    }
+
+    &--sky {
+      background: rgba($sky, 0.1);
+      color: $sky;
+      border: 1px solid rgba($sky, 0.25);
+
+      .material-icons { animation: spin 1.2s linear infinite; }
+    }
+
+    &--emerald {
+      background: rgba($emerald, 0.1);
+      color: $emerald;
+      border: 1px solid rgba($emerald, 0.25);
+    }
+  }
+
+  &__date {
+    font-size: 0.75rem;
+    color: $text-tertiary;
+    white-space: nowrap;
+  }
+
+  &__content {
+    font-size: 0.9375rem;
+    color: $text-secondary;
+    line-height: 1.65;
+  }
+}

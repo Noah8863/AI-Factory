@@ -1,7 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="AI Factory API")
+from db.database import Base, engine
+from models import idea as _idea_model  # noqa: F401 — registers model with Base
+from api.routes.ideas import router as ideas_router
+
+# Create all database tables on startup
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="AI Factory API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -10,6 +17,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(ideas_router)
 
 
 @app.get("/")

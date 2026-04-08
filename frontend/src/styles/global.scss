@@ -1,14 +1,133 @@
+@use './variables' as *;
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: $bg-base;
+  color: $text-primary;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// ─── Utility classes ─────────────────────────────────────────────────────────
+
+.gradient-text {
+  background: $gradient-text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: $radius-full;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  transition: $transition;
+  white-space: nowrap;
+
+  .material-icons { font-size: 18px; }
+
+  &--primary {
+    background: $gradient-brand;
+    color: #fff;
+    box-shadow: 0 0 28px rgba($indigo, 0.35);
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 40px rgba($indigo, 0.5);
+    }
+    &:active { transform: translateY(0); }
+  }
+
+  &--ghost {
+    background: transparent;
+    color: $text-secondary;
+    border: 1px solid $border-default;
+
+    &:hover {
+      background: $bg-elevated;
+      color: $text-primary;
+      border-color: $border-strong;
+    }
+  }
+
+  &--lg {
+    padding: 14px 32px;
+    font-size: 1rem;
+  }
+}
+
+// ─── Section shared ──────────────────────────────────────────────────────────
+
+.section-header {
+  text-align: center;
+  margin-bottom: 56px;
+}
+
+.section-label {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: $indigo;
+  margin-bottom: 12px;
+}
+
+.section-title {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-weight: 800;
+  color: $text-primary;
+  line-height: 1.2;
+  margin-bottom: 16px;
+}
+
+.section-sub {
+  font-size: 1.0625rem;
+  color: $text-secondary;
+  max-width: 480px;
+  margin: 0 auto;
+  line-height: 1.7;
+}
+
+// ─── Animations ──────────────────────────────────────────────────────────────
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1;   }
 }
