@@ -2,36 +2,44 @@ import { useEffect, useRef, useState } from 'react'
 import './ChatThread.scss'
 
 function parseMarkdownBold(text) {
-  // Convert **text** to <strong>text</strong>
   const parts = text.split(/\*\*(.*?)\*\*/g)
   return parts.map((part, i) =>
     i % 2 === 1 ? <strong key={i}>{part}</strong> : part
   )
 }
 
+/**
+ * SQLite stores datetimes as UTC without a 'Z' suffix.
+ * Appending 'Z' tells JS to treat it as UTC so toLocaleTimeString()
+ * converts correctly to the user's local timezone.
+ */
+function formatTime(isoString) {
+  if (!isoString) return ''
+  const utc = isoString.endsWith('Z') ? isoString : isoString + 'Z'
+  return new Date(utc).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 function MessageBubble({ message }) {
   const isUser = message.role === 'user'
   return (
-    <div className={`chat-bubble chat-bubble--${isUser ? 'user' : 'agent'}`}>
+    <div className={`chat-bubble chat-bubble--${isUser ? 'user' : 'agent'} ${message._optimistic ? 'chat-bubble--optimistic' : ''}`}>
       {!isUser && (
         <div className="chat-bubble__avatar">
           <span className="material-icons">smart_toy</span>
         </div>
       )}
       <div className="chat-bubble__body">
-        {!isUser && (
-          <span className="chat-bubble__name">PM Agent</span>
-        )}
+        {!isUser && <span className="chat-bubble__name">PM Agent</span>}
         <div className="chat-bubble__text">
           {message.content.split('\n\n').map((para, i) => (
             <p key={i}>{parseMarkdownBold(para)}</p>
           ))}
         </div>
         <span className="chat-bubble__time">
-          {new Date(message.created_at).toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
+          {message._optimistic ? 'Sending…' : formatTime(message.created_at)}
         </span>
       </div>
       {isUser && (
@@ -63,27 +71,21 @@ export default function ChatThread({
   messages,
   status,
   isSending,
+  sendError,
+  showReadyBanner,
   onSendMessage,
   onContinueChat,
   onStartTasking,
   onBack,
 }) {
   const [input, setInput] = useState('')
-  const [hideReadyBanner, setHideReadyBanner] = useState(false)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const isTasking = status === 'tasking'
-  const isReady = status === 'ready_to_task' && !hideReadyBanner
 
-  // Auto-scroll to bottom whenever messages or typing state changes
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isSending])
-
-  // Re-show banner on every new PM response if still ready_to_task
-  useEffect(() => {
-    if (status === 'ready_to_task') setHideReadyBanner(false)
-  }, [messages.length, status])
 
   const handleSend = () => {
     const trimmed = input.trim()
@@ -98,12 +100,6 @@ export default function ChatThread({
       e.preventDefault()
       handleSend()
     }
-  }
-
-  const handleContinue = () => {
-    setHideReadyBanner(true)
-    onContinueChat()
-    inputRef.current?.focus()
   }
 
   return (
@@ -121,11 +117,7 @@ export default function ChatThread({
           <div>
             <p className="chat-thread__agent-name">PM Agent</p>
             <p className="chat-thread__agent-status">
-              {isTasking
-                ? 'Creating tasks…'
-                : isSending
-                ? 'Typing…'
-                : 'Active'}
+              {isTasking ? 'Creating tasks…' : isSending ? 'Typing…' : 'Active'}
             </p>
           </div>
         </div>
@@ -150,25 +142,39 @@ export default function ChatThread({
         <div ref={bottomRef} />
       </div>
 
+      {/* ── Send error ─────────────────────────────────────────── */}
+      {sendError && (
+        <div className="chat-thread__error">
+          <span className="material-icons">error_outline</span>
+          {sendError}
+        </div>
+      )}
+
       {/* ── Ready-to-task banner ───────────────────────────────── */}
-      {isReady && !isTasking && (
+      {showReadyBanner && !isTasking && (
         <div className="chat-ready-banner">
           <div className="chat-ready-banner__icon">
             <span className="material-icons">check_circle</span>
           </div>
           <div className="chat-ready-banner__body">
-            <p className="chat-ready-banner__title">Ready to start tasking</p>
+            <p className="chat-ready-banner__title">Ready to start building</p>
             <p className="chat-ready-banner__sub">
               The PM has enough context to generate tasks. How would you like to proceed?
             </p>
           </div>
           <div className="chat-ready-banner__actions">
-            <button className="chat-ready-banner__btn chat-ready-banner__btn--ghost" onClick={handleContinue}>
+            <button
+              className="chat-ready-banner__btn chat-ready-banner__btn--ghost"
+              onClick={onContinueChat}
+            >
               <span className="material-icons">chat</span>
               Continue Chat
             </button>
-            <button className="chat-ready-banner__btn chat-ready-banner__btn--primary" onClick={onStartTasking}>
-              Start Tasking
+            <button
+              className="chat-ready-banner__btn chat-ready-banner__btn--primary"
+              onClick={onStartTasking}
+            >
+              Start Building
               <span className="material-icons">rocket_launch</span>
             </button>
           </div>

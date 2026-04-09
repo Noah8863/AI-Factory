@@ -170,6 +170,10 @@
   &--agent {
     align-self: flex-start;
   }
+
+  &--optimistic {
+    opacity: 0.65;
+  }
 }
 
 .chat-bubble__avatar {
@@ -409,6 +413,22 @@
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+// ─── Send error ───────────────────────────────────────────────────────────────
+
+.chat-thread__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba($rose, 0.08);
+  border-top: 1px solid rgba($rose, 0.2);
+  font-size: 0.875rem;
+  color: $rose;
+  flex-shrink: 0;
+
+  .material-icons { font-size: 16px; }
+}
 
 // ─── Input bar ────────────────────────────────────────────────────────────────
 

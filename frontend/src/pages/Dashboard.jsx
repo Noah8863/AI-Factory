@@ -49,6 +49,8 @@ export default function Dashboard() {
   const [conversation, setConversation] = useState(null)  // { id, status }
   const [messages, setMessages] = useState([])            // MessageRead[]
   const [isSending, setIsSending] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const [showReadyBanner, setShowReadyBanner] = useState(false)
 
   // ── History state ────────────────────────────────────────────
   const [ideas, setIdeas] = useState([])
@@ -95,6 +97,7 @@ export default function Dashboard() {
       const { conversation: conv, messages: msgs } = res.data
       setConversation(conv)
       setMessages(msgs)
+      setShowReadyBanner(conv.status === 'ready_to_task')
       setText('')
       localStorage.removeItem(DRAFT_KEY)
       setActiveNav('chat')
@@ -108,14 +111,31 @@ export default function Dashboard() {
   // ── Send message in active conversation ──────────────────────
   const handleSendMessage = async (content) => {
     if (!conversation) return
+    setSendError('')
+
+    // Optimistically show the user's message immediately
+    const optimisticMsg = {
+      id: `optimistic-${Date.now()}`,
+      conversation_id: conversation.id,
+      role: 'user',
+      content,
+      created_at: new Date().toISOString(),
+      _optimistic: true,
+    }
+    setMessages((prev) => [...prev, optimisticMsg])
     setIsSending(true)
+
     try {
       const res = await sendMessage(conversation.id, content)
       const { conversation: conv, messages: msgs } = res.data
       setConversation(conv)
       setMessages(msgs)
+      // Show the ready banner only when the status freshly becomes ready_to_task
+      if (conv.status === 'ready_to_task') setShowReadyBanner(true)
     } catch {
-      // Could add error toast here
+      // Remove the optimistic message so the user knows it failed
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
+      setSendError('Failed to send. Please try again.')
     } finally {
       setIsSending(false)
     }
@@ -124,16 +144,19 @@ export default function Dashboard() {
   // ── Start tasking ────────────────────────────────────────────
   const handleStartTasking = async () => {
     if (!conversation) return
+    setShowReadyBanner(false)
     try {
       const res = await startTasking(conversation.id)
       setConversation(res.data)
     } catch {
-      // Could add error toast here
+      setSendError('Failed to start tasking. Please try again.')
     }
   }
 
-  // ── Continue chat (no-op — banner hides locally in ChatThread) ─
-  const handleContinueChat = () => {}
+  // ── Continue chat — dismiss banner and keep chatting ─────────
+  const handleContinueChat = () => {
+    setShowReadyBanner(false)
+  }
 
   // ── Back from chat to new idea ────────────────────────────────
   const handleBackFromChat = () => {
@@ -331,6 +354,8 @@ export default function Dashboard() {
             messages={messages}
             status={conversation.status}
             isSending={isSending}
+            sendError={sendError}
+            showReadyBanner={showReadyBanner}
             onSendMessage={handleSendMessage}
             onContinueChat={handleContinueChat}
             onStartTasking={handleStartTasking}
