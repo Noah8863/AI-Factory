@@ -14,10 +14,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 140px 24px 100px;
+  padding: 140px 24px 80px;
   overflow: hidden;
 
-  // Background layers
+  @media (max-width: 640px) {
+    padding: 120px 20px 60px;
+    min-height: auto;
+  }
+
   &__bg {
     position: absolute;
     inset: 0;
@@ -36,7 +40,12 @@
       top: -180px;
       left: 50%;
       transform: translateX(-50%);
-      animation-delay: 0s;
+
+      @media (max-width: 640px) {
+        width: 400px;
+        height: 400px;
+        top: -100px;
+      }
     }
 
     &--2 {
@@ -46,6 +55,8 @@
       bottom: -80px;
       right: -100px;
       animation-delay: 2s;
+
+      @media (max-width: 640px) { display: none; }
     }
 
     &--3 {
@@ -55,6 +66,8 @@
       top: 30%;
       left: -60px;
       animation-delay: 4s;
+
+      @media (max-width: 640px) { display: none; }
     }
   }
 
@@ -67,11 +80,11 @@
     -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, black 30%, transparent 100%);
   }
 
-  // Content
   &__content {
     position: relative;
     text-align: center;
     max-width: 800px;
+    width: 100%;
     animation: fadeUp 0.9s $ease-out both;
   }
 
@@ -86,27 +99,35 @@
     font-size: 0.8125rem;
     font-weight: 600;
     color: #a5b4fc;
-    margin-bottom: 32px;
+    margin-bottom: 28px;
     letter-spacing: 0.02em;
 
     .material-icons { font-size: 15px; }
+
+    @media (max-width: 640px) {
+      font-size: 0.75rem;
+      padding: 5px 12px;
+      margin-bottom: 20px;
+    }
   }
 
   &__title {
-    font-size: clamp(3rem, 8vw, 5.5rem);
+    font-size: clamp(2.5rem, 10vw, 5.5rem);
     font-weight: 800;
     line-height: 1.08;
     letter-spacing: -0.03em;
     color: $text-primary;
-    margin-bottom: 28px;
+    margin-bottom: 24px;
   }
 
   &__subtitle {
-    font-size: clamp(1rem, 2.5vw, 1.1875rem);
+    font-size: clamp(0.9375rem, 3vw, 1.1875rem);
     color: $text-secondary;
     line-height: 1.75;
     max-width: 560px;
-    margin: 0 auto 44px;
+    margin: 0 auto 36px;
+
+    @media (max-width: 640px) { margin-bottom: 28px; }
   }
 
   &__actions {
@@ -115,15 +136,24 @@
     justify-content: center;
     gap: 12px;
     flex-wrap: wrap;
-    margin-bottom: 64px;
+    margin-bottom: 56px;
+
+    @media (max-width: 400px) {
+      flex-direction: column;
+      width: 100%;
+
+      .btn { width: 100%; justify-content: center; }
+    }
   }
 
   &__stats {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 32px;
+    gap: 24px;
     flex-wrap: wrap;
+
+    @media (max-width: 400px) { gap: 16px; }
   }
 
   &__stat {
@@ -140,10 +170,12 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+
+    @media (max-width: 400px) { font-size: 1.375rem; }
   }
 
   &__stat-label {
-    font-size: 0.75rem;
+    font-size: 0.6875rem;
     font-weight: 500;
     color: $text-tertiary;
     letter-spacing: 0.06em;
@@ -154,14 +186,18 @@
     width: 1px;
     height: 32px;
     background: $border-default;
+
+    @media (max-width: 400px) { height: 24px; }
   }
 }
 
 // ─── Steps ───────────────────────────────────────────────────────────────────
 
 .steps-section {
-  padding: 100px 0;
+  padding: 80px 0;
   border-top: 1px solid $border-subtle;
+
+  @media (max-width: 640px) { padding: 60px 0; }
 }
 
 .steps-grid {
@@ -170,24 +206,27 @@
   gap: 0;
   position: relative;
 
-  @media (max-width: 768px) {
+  @media (max-width: 900px) {
     grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    gap: 12px;
   }
 
   @media (max-width: 480px) {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 }
 
 .step-card {
   position: relative;
-  padding: 32px 28px;
+  padding: 28px 24px;
   border: 1px solid $border-subtle;
   border-radius: $radius-lg;
   background: $bg-surface;
   margin: 0 8px;
   transition: $transition;
+
+  @media (max-width: 900px) { margin: 0; }
 
   &:hover {
     background: $bg-elevated;
@@ -200,7 +239,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
   &__number {
@@ -220,17 +259,14 @@
     align-items: center;
     justify-content: center;
 
-    .material-icons {
-      font-size: 20px;
-      color: $indigo;
-    }
+    .material-icons { font-size: 20px; color: $indigo; }
   }
 
   &__title {
-    font-size: 1.125rem;
+    font-size: 1.0625rem;
     font-weight: 700;
     color: $text-primary;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
 
   &__detail {
@@ -254,33 +290,32 @@
     align-items: center;
     justify-content: center;
 
-    .material-icons {
-      font-size: 14px;
-      color: $text-tertiary;
-    }
+    .material-icons { font-size: 14px; color: $text-tertiary; }
 
-    @media (max-width: 768px) { display: none; }
+    @media (max-width: 900px) { display: none; }
   }
 }
 
 // ─── Features ────────────────────────────────────────────────────────────────
 
 .features-section {
-  padding: 100px 0;
+  padding: 80px 0;
   border-top: 1px solid $border-subtle;
+
+  @media (max-width: 640px) { padding: 60px 0; }
 }
 
 .features-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  gap: 14px;
 
   @media (max-width: 900px) { grid-template-columns: repeat(2, 1fr); }
-  @media (max-width: 560px) { grid-template-columns: 1fr; }
+  @media (max-width: 540px) { grid-template-columns: 1fr; }
 }
 
 .feature-card {
-  padding: 28px;
+  padding: 24px;
   background: $bg-surface;
   border: 1px solid $border-subtle;
   border-radius: $radius-lg;
@@ -301,13 +336,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
     box-shadow: 0 0 20px rgba($indigo, 0.3);
 
-    .material-icons {
-      font-size: 22px;
-      color: #fff;
-    }
+    .material-icons { font-size: 22px; color: #fff; }
   }
 
   &__title {
@@ -327,19 +359,26 @@
 // ─── CTA ─────────────────────────────────────────────────────────────────────
 
 .cta-section {
-  padding: 100px 0;
+  padding: 80px 0;
   border-top: 1px solid $border-subtle;
+
+  @media (max-width: 640px) { padding: 60px 0; }
 }
 
 .cta-card {
   position: relative;
   overflow: hidden;
   text-align: center;
-  padding: 80px 40px;
+  padding: 72px 32px;
   background: $bg-surface;
   border: 1px solid $border-default;
   border-radius: $radius-xl;
   box-shadow: $shadow-glow;
+
+  @media (max-width: 640px) {
+    padding: 52px 24px;
+    border-radius: $radius-lg;
+  }
 
   &__orb {
     position: absolute;
@@ -356,37 +395,50 @@
 
   &__title {
     position: relative;
-    font-size: clamp(2rem, 5vw, 3rem);
+    font-size: clamp(1.75rem, 6vw, 3rem);
     font-weight: 800;
     line-height: 1.15;
     letter-spacing: -0.02em;
     color: $text-primary;
-    margin: 16px 0 20px;
+    margin: 16px 0 18px;
   }
 
   &__sub {
     position: relative;
-    font-size: 1.0625rem;
+    font-size: clamp(0.9375rem, 2.5vw, 1.0625rem);
     color: $text-secondary;
-    margin-bottom: 40px;
+    margin-bottom: 36px;
     line-height: 1.7;
   }
 
-  .btn { position: relative; }
+  .btn {
+    position: relative;
+
+    @media (max-width: 400px) {
+      width: 100%;
+      justify-content: center;
+    }
+  }
 }
 
 // ─── Footer ──────────────────────────────────────────────────────────────────
 
 .footer {
   border-top: 1px solid $border-subtle;
-  padding: 32px 0;
+  padding: 28px 0;
 
   &__inner {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
+
+    @media (max-width: 480px) {
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
   }
 
   &__logo {

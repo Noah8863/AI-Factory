@@ -2,8 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from db.database import Base, engine
-from models import idea as _idea_model  # noqa: F401 — registers model with Base
+from models import idea as _idea_model              # noqa: F401
+from models import conversation as _conv_model      # noqa: F401
+from models import message as _msg_model            # noqa: F401
 from api.routes.ideas import router as ideas_router
+from api.routes.conversations import router as conversations_router
 
 # Create all database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -19,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(ideas_router)
+app.include_router(conversations_router)
 
 
 @app.get("/")

@@ -7,7 +7,7 @@
   right: 0;
   z-index: 100;
   padding: 0 24px;
-  background: rgba($bg-base, 0.75);
+  background: rgba($bg-base, 0.8);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid $border-subtle;
@@ -30,6 +30,7 @@
     color: $text-primary;
     text-decoration: none;
     transition: $transition;
+    z-index: 1;
 
     .material-icons {
       font-size: 22px;
@@ -42,10 +43,13 @@
     &:hover { opacity: 0.85; }
   }
 
+  // ── Desktop links ──────────────────────────────────────────────
   &__links {
     display: flex;
     align-items: center;
     gap: 8px;
+
+    @media (max-width: 640px) { display: none; }
   }
 
   &__link {
@@ -76,6 +80,7 @@
     border-radius: $radius-md;
     cursor: pointer;
     transition: $transition;
+    font-family: inherit;
 
     .material-icons { font-size: 16px; }
 
@@ -89,5 +94,101 @@
   &__cta {
     padding: 8px 20px !important;
     font-size: 0.875rem !important;
+  }
+
+  // ── Hamburger ──────────────────────────────────────────────────
+  &__hamburger {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 36px;
+    height: 36px;
+    padding: 6px;
+    background: transparent;
+    border: 1px solid $border-default;
+    border-radius: $radius-md;
+    cursor: pointer;
+
+    span {
+      display: block;
+      height: 2px;
+      background: $text-secondary;
+      border-radius: 2px;
+      transition: $transition;
+      transform-origin: center;
+    }
+
+    &--open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    &--open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+    &--open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    @media (max-width: 640px) { display: flex; }
+  }
+
+  // ── Mobile drawer ──────────────────────────────────────────────
+  &__drawer {
+    display: flex;
+    flex-direction: column;
+    padding: 12px 16px 20px;
+    border-top: 1px solid $border-subtle;
+    background: rgba($bg-surface, 0.97);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    animation: fadeUp 0.18s $ease-out both;
+
+    @media (min-width: 641px) { display: none; }
+  }
+
+  &__drawer-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 12px;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: $text-secondary;
+    text-decoration: none;
+    border-radius: $radius-md;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    width: 100%;
+    text-align: left;
+    transition: $transition;
+
+    .material-icons { font-size: 20px; }
+
+    &:hover {
+      color: $text-primary;
+      background: $bg-elevated;
+    }
+
+    &--danger:hover {
+      color: $rose;
+      background: rgba($rose, 0.06);
+    }
+  }
+
+  &__drawer-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 13px;
+    background: $gradient-brand;
+    color: #fff;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: $radius-md;
+    transition: $transition;
+    box-shadow: 0 0 24px rgba($indigo, 0.3);
+
+    .material-icons { font-size: 18px; }
+
+    &:hover { box-shadow: 0 0 36px rgba($indigo, 0.45); }
   }
 }

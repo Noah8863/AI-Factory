@@ -146,7 +146,7 @@
     background: $bg-elevated;
     border: 1px solid $border-default;
     border-radius: $radius-md;
-    font-size: 0.9375rem;
+    font-size: 1rem; // 16px — prevents iOS zoom on focus
     color: $text-primary;
     outline: none;
     transition: $transition;

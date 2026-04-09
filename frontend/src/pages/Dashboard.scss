@@ -9,7 +9,7 @@
   color: $text-primary;
 }
 
-// ─── Sidebar ─────────────────────────────────────────────────────────────────
+// ─── Sidebar (desktop) ───────────────────────────────────────────────────────
 
 .sidebar {
   position: fixed;
@@ -23,6 +23,9 @@
   flex-direction: column;
   padding: 24px 16px;
   z-index: 50;
+
+  // Hide entire sidebar on mobile — replaced by bottom tab bar
+  @media (max-width: 640px) { display: none; }
 
   &__logo {
     display: flex;
@@ -87,6 +90,17 @@
 
       &:hover { background: rgba($indigo, 0.16); }
     }
+  }
+
+  &__dot {
+    margin-left: auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+
+    &--green  { background: $emerald; box-shadow: 0 0 6px $emerald; }
+    &--indigo { background: $indigo;  box-shadow: 0 0 6px $indigo;  animation: pulse-glow 1.5s ease-in-out infinite; }
   }
 
   &__badge {
@@ -168,6 +182,54 @@
   }
 }
 
+// ─── Bottom tab bar (mobile) ──────────────────────────────────────────────────
+
+.bottom-tabs {
+  display: none;
+
+  @media (max-width: 640px) {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: rgba($bg-surface, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid $border-subtle;
+    padding: 0 8px env(safe-area-inset-bottom, 0px);
+  }
+
+  &__item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 8px 12px;
+    background: transparent;
+    border: none;
+    color: $text-tertiary;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: $transition;
+    text-decoration: none;
+    position: relative;
+
+    .material-icons { font-size: 22px; }
+
+    &--active {
+      color: $indigo;
+    }
+
+    &--danger { color: $text-tertiary; }
+    &--danger:hover { color: $rose; }
+  }
+}
+
 // ─── Main content ─────────────────────────────────────────────────────────────
 
 .dashboard__main {
@@ -176,9 +238,25 @@
   padding: 40px 48px;
   min-height: 100vh;
 
-  @media (max-width: 768px) {
+  @media (max-width: 900px) {
+    padding: 32px 28px;
+  }
+
+  @media (max-width: 640px) {
     margin-left: 0;
-    padding: 24px 20px;
+    padding: 24px 16px 100px; // bottom padding to clear tab bar
+  }
+
+  // Chat view fills the full height with no extra padding
+  &--chat {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+
+    @media (max-width: 640px) {
+      padding: 0;
+      padding-bottom: 60px; // tab bar
+    }
   }
 }
 
@@ -189,12 +267,12 @@
   max-width: 820px;
 
   &__header {
-    margin-bottom: 32px;
+    margin-bottom: 28px;
   }
 }
 
 .idea-panel__title {
-  font-size: 1.75rem;
+  font-size: clamp(1.375rem, 5vw, 1.75rem);
   font-weight: 800;
   color: $text-primary;
   letter-spacing: -0.02em;
@@ -221,7 +299,7 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: $text-tertiary;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
 
     .material-icons { font-size: 14px; color: $amber; }
   }
@@ -255,6 +333,12 @@
     border-color: $border-accent;
     color: #a5b4fc;
   }
+
+  // Tap-sized targets on mobile
+  @media (max-width: 640px) {
+    padding: 9px 14px;
+    font-size: 0.875rem;
+  }
 }
 
 // ─── Idea input ──────────────────────────────────────────────────────────────
@@ -275,8 +359,8 @@
   &__textarea {
     display: block;
     width: 100%;
-    min-height: 280px;
-    padding: 24px;
+    min-height: 240px;
+    padding: 20px;
     background: transparent;
     border: none;
     outline: none;
@@ -287,23 +371,33 @@
     resize: vertical;
 
     &::placeholder { color: $text-tertiary; }
+
+    @media (max-width: 640px) {
+      min-height: 200px;
+      font-size: 1rem; // prevents iOS zoom on focus
+    }
   }
 
   &__footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 20px;
+    padding: 12px 16px;
     border-top: 1px solid $border-subtle;
     background: $bg-elevated;
-    gap: 16px;
+    gap: 12px;
     flex-wrap: wrap;
+
+    @media (max-width: 480px) {
+      flex-direction: column;
+      align-items: stretch;
+    }
   }
 
   &__meta {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 14px;
   }
 
   &__chars {
@@ -329,6 +423,7 @@
   &__submit {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
     padding: 10px 22px;
     background: $gradient-brand;
@@ -350,6 +445,8 @@
     }
 
     &:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    @media (max-width: 480px) { width: 100%; }
   }
 
   &__spinner {
@@ -386,7 +483,7 @@
 // ─── Tips ────────────────────────────────────────────────────────────────────
 
 .tips {
-  padding: 20px;
+  padding: 18px;
   background: $bg-surface;
   border: 1px solid $border-subtle;
   border-radius: $radius-lg;
@@ -398,7 +495,7 @@
     font-size: 0.8125rem;
     font-weight: 600;
     color: $text-secondary;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
 
     .material-icons { font-size: 16px; color: $amber; }
   }
@@ -448,7 +545,7 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  padding: 80px 0;
+  padding: 60px 0;
   color: $text-tertiary;
 
   .material-icons { font-size: 48px; }
@@ -463,7 +560,7 @@
 }
 
 .idea-card {
-  padding: 20px 24px;
+  padding: 18px 20px;
   background: $bg-surface;
   border: 1px solid $border-subtle;
   border-radius: $radius-lg;
@@ -480,8 +577,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
-    gap: 12px;
+    margin-bottom: 10px;
+    gap: 10px;
+    flex-wrap: wrap;
   }
 
   &__status {

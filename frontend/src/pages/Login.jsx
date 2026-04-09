@@ -2,6 +2,19 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import './Login.scss'
 
+const VALID_USERNAME = import.meta.env.VITE_AUTH_USERNAME
+const VALID_PASSWORD_HASH = import.meta.env.VITE_AUTH_PASSWORD_HASH
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(str)
+  )
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
 export default function Login() {
   const navigate = useNavigate()
   const [form, setForm] = useState({ username: '', password: '' })
@@ -13,18 +26,25 @@ export default function Login() {
     setError('')
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.username.trim() || !form.password.trim()) {
       setError('Please fill in all fields.')
       return
     }
     setLoading(true)
-    // Mock auth — store user in localStorage and redirect
-    setTimeout(() => {
-      localStorage.setItem('aif_user', JSON.stringify({ username: form.username }))
-      navigate('/dashboard')
-    }, 600)
+    const passwordHash = await sha256(form.password)
+    const usernameMatch = form.username.trim() === VALID_USERNAME
+    const passwordMatch = passwordHash === VALID_PASSWORD_HASH
+
+    if (!usernameMatch || !passwordMatch) {
+      setError('Invalid email or password.')
+      setLoading(false)
+      return
+    }
+
+    localStorage.setItem('aif_user', JSON.stringify({ username: form.username }))
+    navigate('/dashboard')
   }
 
   return (
@@ -49,17 +69,17 @@ export default function Login() {
         <form className="login-form" onSubmit={handleSubmit} noValidate>
           <div className="login-form__field">
             <label className="login-form__label" htmlFor="username">
-              Username
+              Email
             </label>
             <div className="login-form__input-wrap">
-              <span className="material-icons">person</span>
+              <span className="material-icons">email</span>
               <input
                 id="username"
                 name="username"
-                type="text"
+                type="email"
                 autoComplete="username"
                 autoFocus
-                placeholder="your-username"
+                placeholder="you@example.com"
                 value={form.username}
                 onChange={handleChange}
                 className="login-form__input"
