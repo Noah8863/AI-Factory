@@ -5,8 +5,10 @@ const api = axios.create({
 })
 
 // ── Ideas ────────────────────────────────────────────────────────────────────
-export const submitIdea = (content) => api.post('/ideas', { content })
-export const getIdeas   = ()        => api.get('/ideas')
+export const submitIdea          = (content) => api.post('/ideas', { content })
+export const getIdeas            = ()        => api.get('/ideas')
+export const getIdeaConversation = (ideaId)  => api.get(`/ideas/${ideaId}/conversation`)
+export const deleteIdea          = (ideaId)  => api.delete(`/ideas/${ideaId}`)
 
 // ── Conversations ────────────────────────────────────────────────────────────
 /** Create a conversation from idea text. Returns ConversationDetail. */

@@ -1,10 +1,22 @@
-# Project Profile: React-Python Web App
+# Project Profile: AI Factory
+
+## Project Overview
+"AI Factory" is an autonomous multi-agent system designed to turn high-level ideas into codebases. 
+- **User Flow**: User logs in -> Chats with a **PM Agent** to define requirements.
+- **Workflow**: PM Agent generates granular JIRA tickets (split by Frontend/Backend).
+- **Execution**: Specialized **Developer Agents** (FE/BE) pick up tickets, write code, and push to a linked GitHub repository.
 
 ## Tech Stack
 - **Frontend**: React.js (Vite), Tailwind CSS, SASS (SCSS), Material Icons
 - **Backend**: Python 3.10+, FastAPI, Uvicorn (ASGI Server)
 - **Database**: SQLAlchemy (ORM) with SQLite (Development)
-- **Package Management**: npm (Frontend), pip / venv (Backend)
+- **Agent Framework**: [Add your library here, e.g., LangChain/LangGraph or CrewAI]
+- **Integrations**: JIRA API (Ticketing), GitHub API (Code Push)
+
+## System Architecture & Agent Roles
+1. **PM Agent**: Gathers requirements, defines scope, and creates "bite-sized" JIRA tickets.
+2. **Backend Dev Agent**: Specialized in Python/FastAPI; consumes BE-tagged tickets.
+3. **Frontend Dev Agent**: Specialized in React/Tailwind; consumes FE-tagged tickets.
 
 ## Build & Development Commands
 
@@ -21,16 +33,13 @@
 - Start API Server: `uvicorn main:app --reload`
 
 ## Project Structure & Conventions
-- **Naming**: Use PascalCase for React components and snake_case for Python functions/variables.
-- **Styling**: 
-  - Use Tailwind for layout and utility spacing.
-  - Use SASS (`.scss`) for complex, reusable component styling or global themes.
-  - Prioritize Material Icons for all iconography.
-- **API**: Follow RESTful conventions. Backend should serve JSON responses.
-- **Imports**: Use absolute imports for Python and alias imports (e.g., `@/components`) for React where possible.
+- **Naming**: PascalCase for React components; snake_case for Python/Backend.
+- **Task Management**: All tasks must be separated into "Frontend" and "Backend" labels in JIRA.
+- **Styling**: Tailwind for layout; SASS (`.scss`) for complex themes; Material Icons for UI.
+- **API**: RESTful conventions; Pydantic for data validation; Axios for FE requests.
+- **Imports**: Absolute imports for Python; Alias imports (`@/components`) for React.
 
-## Missing Tools Added
-- **FastAPI**: Chosen as the Python framework for its speed and automatic Swagger documentation.
-- **Pydantic**: For data validation and settings management in Python.
-- **Axios**: For frontend API requests to the Python backend.
-- **CORS Middleware**: Pre-configured in backend to allow communication with the React dev server.
+## Key Configurations
+- **FastAPI**: Main framework for speed and automatic Swagger docs.
+- **CORS**: Pre-configured to allow React dev server communication.
+- **Pydantic**: Used for strict data validation between agents and the UI.

@@ -1,0 +1,995 @@
+@use '../styles/variables' as *;
+
+// ─── Page shell ───────────────────────────────────────────────────────────────
+.reg-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  background: $bg-base;
+  overflow: hidden;
+
+  &__bg { position: absolute; inset: 0; pointer-events: none; }
+
+  // Glowing orbs
+  &__orb {
+    position: absolute;
+    border-radius: 50%;
+
+    &--1 {
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(circle, rgba($indigo, 0.18) 0%, transparent 65%);
+      top: -250px;
+      right: -150px;
+      animation: orb-drift 8s ease-in-out infinite;
+    }
+
+    &--2 {
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba($violet, 0.13) 0%, transparent 65%);
+      bottom: -150px;
+      left: -100px;
+      animation: orb-drift 10s ease-in-out infinite reverse;
+      animation-delay: -3s;
+    }
+
+    &--3 {
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba($sky, 0.08) 0%, transparent 65%);
+      top: 40%;
+      left: 20%;
+      animation: orb-drift 12s ease-in-out infinite;
+      animation-delay: -6s;
+    }
+  }
+
+  // Dot grid
+  &__grid {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 36px 36px;
+    mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 20%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 20%, transparent 100%);
+  }
+
+  // Floating particles
+  &__particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: $indigo;
+    opacity: 0;
+    animation: particle-float linear infinite;
+
+    &--1  { left: 12%;  animation-duration: 9s;  animation-delay: 0s;    bottom: -10px; }
+    &--2  { left: 24%;  animation-duration: 12s; animation-delay: -2s;   bottom: -10px; width: 3px; height: 3px; background: $violet; }
+    &--3  { left: 38%;  animation-duration: 7s;  animation-delay: -4s;   bottom: -10px; }
+    &--4  { left: 55%;  animation-duration: 11s; animation-delay: -1s;   bottom: -10px; width: 5px; height: 5px; background: $sky; }
+    &--5  { left: 68%;  animation-duration: 8s;  animation-delay: -3s;   bottom: -10px; }
+    &--6  { left: 78%;  animation-duration: 13s; animation-delay: -5s;   bottom: -10px; background: $violet; }
+    &--7  { left: 88%;  animation-duration: 10s; animation-delay: -7s;   bottom: -10px; width: 3px; height: 3px; }
+    &--8  { left: 6%;   animation-duration: 15s; animation-delay: -2.5s; bottom: -10px; background: $sky; }
+    &--9  { left: 46%;  animation-duration: 6s;  animation-delay: -8s;   bottom: -10px; width: 2px; height: 2px; }
+  }
+}
+
+// ─── Card ─────────────────────────────────────────────────────────────────────
+.reg-card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: $bg-surface;
+  border: 1px solid $border-default;
+  border-radius: $radius-xl;
+  padding: 40px 44px;
+  box-shadow: $shadow-card, $shadow-glow;
+  animation: card-rise 0.65s $ease-out both;
+
+  @media (max-width: 560px) {
+    padding: 32px 24px;
+  }
+
+  &__logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: $text-primary;
+    text-decoration: none;
+    margin-bottom: 32px;
+    transition: $transition;
+
+    .material-icons {
+      font-size: 20px;
+      background: $gradient-brand;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    &:hover { opacity: 0.8; }
+  }
+
+  &__signin {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: $text-tertiary;
+
+    a {
+      color: $indigo;
+      text-decoration: none;
+      font-weight: 600;
+      transition: $transition;
+
+      &:hover { color: lighten($indigo, 12%); }
+    }
+  }
+}
+
+// ─── Step progress bar ────────────────────────────────────────────────────────
+.step-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 36px;
+
+  &__item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    flex: 1;
+
+    &:first-child { align-items: flex-start; }
+    &:last-child  { align-items: flex-end; }
+  }
+
+  &__line {
+    position: absolute;
+    top: 18px;
+    left: calc(50% + 18px);
+    right: calc(-50% + 18px);
+    height: 2px;
+    background: $border-default;
+    overflow: hidden;
+    transform: translateY(-50%);
+    z-index: 0;
+
+    // Fix: the line spans between circles
+    // Reposition correctly
+    left: 50%;
+    right: -50%;
+    transform: none;
+    top: 17px;
+  }
+
+  &__line-fill {
+    height: 100%;
+    background: $gradient-brand;
+    transition: width 0.5s $ease-out;
+    border-radius: 2px;
+  }
+
+  &__circle {
+    position: relative;
+    z-index: 1;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 2px solid $border-default;
+    background: $bg-elevated;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.35s $ease-out;
+    color: $text-tertiary;
+
+    .material-icons { font-size: 16px; }
+
+    &--active {
+      border-color: $indigo;
+      background: rgba($indigo, 0.1);
+      color: $indigo;
+      box-shadow: 0 0 0 4px rgba($indigo, 0.12), 0 0 20px rgba($indigo, 0.25);
+      animation: circle-pulse 2s ease-in-out infinite;
+    }
+
+    &--done {
+      border-color: $emerald;
+      background: rgba($emerald, 0.12);
+      color: $emerald;
+      box-shadow: 0 0 12px rgba($emerald, 0.2);
+      animation: pop-in 0.4s $ease-out both;
+
+      .material-icons { font-size: 16px; font-weight: 700; }
+    }
+  }
+
+  &__label {
+    margin-top: 8px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: $text-tertiary;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: $transition;
+    text-align: center;
+
+    &--active {
+      color: $indigo;
+    }
+  }
+}
+
+// ─── Step content transitions ─────────────────────────────────────────────────
+.reg-content {
+  &--forward {
+    animation: slide-in-right 0.38s $ease-out both;
+  }
+  &--back {
+    animation: slide-in-left 0.38s $ease-out both;
+  }
+}
+
+// ─── Step inner layout ────────────────────────────────────────────────────────
+.reg-step {
+  &__content {}
+
+  &__header {
+    margin-bottom: 28px;
+    text-align: center;
+  }
+
+  &__icon-wrap {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba($indigo, 0.2), rgba($violet, 0.15));
+    border: 1px solid rgba($indigo, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    animation: icon-float 4s ease-in-out infinite;
+
+    .material-icons {
+      font-size: 26px;
+      background: $gradient-brand;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    &--violet {
+      background: linear-gradient(135deg, rgba($violet, 0.2), rgba($sky, 0.12));
+      border-color: rgba($violet, 0.3);
+
+      .material-icons {
+        background: linear-gradient(135deg, $violet, $sky);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+    }
+
+    &--sky {
+      background: linear-gradient(135deg, rgba($sky, 0.15), rgba($emerald, 0.12));
+      border-color: rgba($sky, 0.3);
+
+      .material-icons {
+        background: linear-gradient(135deg, $sky, $emerald);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+    }
+  }
+
+  &__title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: $text-primary;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+
+  &__sub {
+    font-size: 0.9rem;
+    color: $text-secondary;
+    line-height: 1.6;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+}
+
+// ─── Form fields ──────────────────────────────────────────────────────────────
+.reg-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.reg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+
+  &__label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    letter-spacing: 0.02em;
+  }
+
+  &__wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    > .material-icons:first-child {
+      position: absolute;
+      left: 14px;
+      font-size: 18px;
+      color: $text-tertiary;
+      pointer-events: none;
+      z-index: 1;
+    }
+  }
+
+  &__input {
+    width: 100%;
+    padding: 12px 14px 12px 44px;
+    background: $bg-elevated;
+    border: 1px solid $border-default;
+    border-radius: $radius-md;
+    font-size: 1rem;
+    color: $text-primary;
+    outline: none;
+    transition: $transition;
+    font-family: inherit;
+
+    &::placeholder { color: $text-tertiary; }
+
+    &:focus {
+      border-color: $indigo;
+      background: $bg-hover;
+      box-shadow: 0 0 0 3px rgba($indigo, 0.12);
+    }
+  }
+
+  &__eye {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: $text-tertiary;
+    display: flex;
+    align-items: center;
+    padding: 4px;
+    border-radius: 4px;
+    transition: $transition;
+
+    .material-icons { font-size: 18px; }
+
+    &:hover { color: $text-secondary; }
+  }
+
+  &__err {
+    font-size: 0.8rem;
+    color: $rose;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  &--error &__input {
+    border-color: rgba($rose, 0.45);
+
+    &:focus { box-shadow: 0 0 0 3px rgba($rose, 0.1); }
+  }
+}
+
+// ─── Password strength ────────────────────────────────────────────────────────
+.pwd-strength {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+
+  &__bars {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+  }
+
+  &__bar {
+    flex: 1;
+    height: 4px;
+    border-radius: 4px;
+    background: $border-default;
+    transition: background 0.3s ease;
+
+    &--rose    { background: $rose; }
+    &--amber   { background: $amber; }
+    &--sky     { background: $sky; }
+    &--emerald { background: $emerald; }
+  }
+
+  &__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    min-width: 40px;
+    text-align: right;
+
+    &--rose    { color: $rose; }
+    &--amber   { color: $amber; }
+    &--sky     { color: $sky; }
+    &--emerald { color: $emerald; }
+  }
+}
+
+// ─── Preference sections ──────────────────────────────────────────────────────
+.pref-section {
+  margin-bottom: 24px;
+
+  &:last-child { margin-bottom: 0; }
+
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+
+    .material-icons {
+      font-size: 15px;
+      color: $indigo;
+    }
+  }
+}
+
+// ─── Theme cards ──────────────────────────────────────────────────────────────
+.theme-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.theme-card {
+  position: relative;
+  border-radius: $radius-lg;
+  border: 2px solid $border-default;
+  background: $bg-elevated;
+  padding: 14px 14px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.25s $ease-out;
+  overflow: hidden;
+
+  &:hover {
+    border-color: $border-strong;
+    transform: translateY(-2px);
+  }
+
+  &--active {
+    border-color: $indigo;
+    background: rgba($indigo, 0.06);
+    box-shadow: 0 0 0 1px rgba($indigo, 0.2), 0 4px 20px rgba($indigo, 0.12);
+  }
+
+  &__preview {
+    width: 100%;
+    height: 72px;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px;
+
+    &--dark {
+      background: #0e0e1c;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+
+    &--light {
+      background: #f4f4f8;
+      border: 1px solid rgba(0,0,0,0.07);
+    }
+  }
+
+  &__preview-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, $indigo, $violet);
+    width: 55%;
+  }
+
+  &__preview-row {
+    height: 5px;
+    border-radius: 3px;
+
+    .theme-card__preview--dark & {
+      background: rgba(255,255,255,0.12);
+    }
+    .theme-card__preview--light & {
+      background: rgba(0,0,0,0.12);
+    }
+
+    &--short { width: 65%; }
+  }
+
+  &__name {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    transition: $transition;
+  }
+
+  &--active &__name { color: $indigo; }
+
+  &__check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 16px !important;
+    color: $indigo;
+    animation: pop-in 0.3s $ease-out both;
+  }
+}
+
+// ─── Toggle switch ────────────────────────────────────────────────────────────
+.pref-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: $transition;
+  user-select: none;
+
+  &:hover {
+    background: $bg-hover;
+    border-color: $border-strong;
+  }
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  &__label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__desc {
+    font-size: 0.8rem;
+    color: $text-secondary;
+    line-height: 1.4;
+  }
+
+  &__track {
+    flex-shrink: 0;
+    width: 44px;
+    height: 24px;
+    border-radius: $radius-full;
+    background: $border-default;
+    border: 1px solid $border-strong;
+    position: relative;
+    transition: all 0.28s $ease-out;
+
+    &--on {
+      background: $indigo;
+      border-color: $indigo;
+      box-shadow: 0 0 12px rgba($indigo, 0.35);
+    }
+  }
+
+  &__thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    transition: transform 0.28s $ease-out;
+
+    .pref-toggle__track--on & {
+      transform: translateX(20px);
+    }
+  }
+}
+
+// ─── Personality cards ────────────────────────────────────────────────────────
+.personality-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+
+  @media (max-width: 460px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.personality-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 14px 10px;
+  border: 2px solid $border-default;
+  border-radius: $radius-lg;
+  background: $bg-elevated;
+  cursor: pointer;
+  transition: all 0.25s $ease-out;
+
+  .material-icons {
+    font-size: 22px;
+    color: $text-tertiary;
+    transition: $transition;
+  }
+
+  strong {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: $text-primary;
+  }
+
+  span {
+    font-size: 0.73rem;
+    color: $text-secondary;
+    line-height: 1.4;
+  }
+
+  &:hover {
+    border-color: $border-strong;
+    transform: translateY(-2px);
+
+    .material-icons { color: $text-secondary; }
+  }
+
+  &--active {
+    border-color: $indigo;
+    background: rgba($indigo, 0.06);
+    box-shadow: 0 0 0 1px rgba($indigo, 0.15), 0 4px 16px rgba($indigo, 0.1);
+
+    .material-icons {
+      background: $gradient-brand;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    strong { color: $indigo; }
+  }
+}
+
+// ─── Integration cards ────────────────────────────────────────────────────────
+.integration-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.integration-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  border-radius: $radius-lg;
+  transition: $transition;
+  animation: fadeUp 0.4s $ease-out both;
+
+  &:nth-child(2) { animation-delay: 0.08s; }
+
+  &:hover {
+    border-color: $border-strong;
+    background: $bg-hover;
+  }
+
+  &__left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    .material-icons { font-size: 20px; }
+
+    &--jira {
+      background: linear-gradient(135deg, rgba(#0052cc, 0.25), rgba(#0065ff, 0.15));
+      border: 1px solid rgba(#0065ff, 0.3);
+
+      .material-icons { color: #4d9fff; }
+    }
+
+    &--github {
+      background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+      border: 1px solid rgba(255,255,255,0.12);
+
+      .material-icons { color: $text-secondary; }
+    }
+  }
+
+  &__info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+
+    strong {
+      font-size: 0.9375rem;
+      font-weight: 700;
+      color: $text-primary;
+    }
+
+    span {
+      font-size: 0.8rem;
+      color: $text-secondary;
+      line-height: 1.4;
+    }
+  }
+
+  &__btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: $bg-hover;
+    border: 1px solid $border-strong;
+    border-radius: $radius-md;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    cursor: not-allowed;
+    opacity: 0.65;
+    font-family: inherit;
+
+    .material-icons { font-size: 15px; }
+  }
+}
+
+.integration-skip {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  font-size: 0.8125rem;
+  color: $text-tertiary;
+  line-height: 1.5;
+  padding: 0 2px;
+  margin-bottom: 24px;
+
+  .material-icons { font-size: 15px; margin-top: 1px; flex-shrink: 0; }
+}
+
+// ─── Create account button ────────────────────────────────────────────────────
+.reg-create-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 15px;
+  background: $gradient-brand;
+  color: #fff;
+  border: none;
+  border-radius: $radius-md;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: $transition;
+  box-shadow: 0 0 32px rgba($indigo, 0.35);
+  overflow: hidden;
+  letter-spacing: 0.01em;
+
+  .material-icons { font-size: 20px; }
+
+  // Shimmer sweep on hover
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    transition: left 0.5s ease;
+  }
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 0 48px rgba($indigo, 0.55);
+
+    &::after { left: 150%; }
+  }
+
+  &:active:not(:disabled) { transform: translateY(0); }
+
+  &:disabled {
+    opacity: 0.75;
+    cursor: not-allowed;
+  }
+
+  &__spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+}
+
+// ─── Error banner ─────────────────────────────────────────────────────────────
+.reg-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba($rose, 0.08);
+  border: 1px solid rgba($rose, 0.25);
+  border-radius: $radius-md;
+  font-size: 0.875rem;
+  color: $rose;
+  margin-bottom: 16px;
+
+  .material-icons { font-size: 16px; flex-shrink: 0; }
+}
+
+// ─── Navigation row ───────────────────────────────────────────────────────────
+.reg-nav {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+
+  &--split {
+    justify-content: space-between;
+  }
+
+  &__back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 11px 18px;
+    background: transparent;
+    border: 1px solid $border-default;
+    border-radius: $radius-md;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: $text-secondary;
+    cursor: pointer;
+    font-family: inherit;
+    transition: $transition;
+
+    .material-icons { font-size: 16px; }
+
+    &:hover {
+      background: $bg-elevated;
+      color: $text-primary;
+      border-color: $border-strong;
+    }
+  }
+
+  &__next {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 22px;
+    background: $gradient-brand;
+    color: #fff;
+    border: none;
+    border-radius: $radius-md;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: $transition;
+    box-shadow: 0 0 20px rgba($indigo, 0.28);
+
+    .material-icons { font-size: 17px; }
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 32px rgba($indigo, 0.45);
+    }
+  }
+}
+
+// ─── Keyframes ────────────────────────────────────────────────────────────────
+@keyframes card-rise {
+  from { opacity: 0; transform: translateY(32px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(28px); }
+  to   { opacity: 1; transform: translateX(0);    }
+}
+
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-28px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+
+@keyframes orb-drift {
+  0%, 100% { transform: translate(0, 0)    scale(1);    }
+  33%       { transform: translate(-20px, 15px) scale(1.04); }
+  66%       { transform: translate(15px, -10px) scale(0.97); }
+}
+
+@keyframes particle-float {
+  0%   { opacity: 0;   transform: translateY(0)     scale(0.6); }
+  10%  { opacity: 0.7; }
+  90%  { opacity: 0.4; }
+  100% { opacity: 0;   transform: translateY(-80vh) scale(1.2); }
+}
+
+@keyframes circle-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba($indigo, 0.12), 0 0 20px rgba($indigo, 0.2); }
+  50%       { box-shadow: 0 0 0 6px rgba($indigo, 0.18), 0 0 28px rgba($indigo, 0.35); }
+}
+
+@keyframes pop-in {
+  from { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+@keyframes icon-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-5px); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

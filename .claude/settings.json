@@ -20,7 +20,9 @@
       "Bash(cmd /c \"for /f \\\\\"tokens=5\\\\\" %p in \\('netstat -ano 2^>nul ^| findstr :8000'\\) do @echo PID=%p && taskkill /F /PID %p\")",
       "Bash(python3 -c ':*)",
       "Bash(venv/Scripts/python -c ':*)",
-      "Bash(cmd /c \"taskkill /F /PID 67252 & taskkill /F /PID 69304 & taskkill /F /PID 106712 & taskkill /F /PID 130024\")"
+      "Bash(cmd /c \"taskkill /F /PID 67252 & taskkill /F /PID 69304 & taskkill /F /PID 106712 & taskkill /F /PID 130024\")",
+      "Read(//tmp/**)",
+      "Bash(cmd /c \"for /f \\\\\"tokens=5\\\\\" %a in \\('netstat -aon ^| findstr :8000'\\) do taskkill /F /PID %a\")"
     ]
   }
 }

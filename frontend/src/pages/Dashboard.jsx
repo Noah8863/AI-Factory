@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getIdeas, startConversation, sendMessage, startTasking } from '../utils/api'
+import { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea } from '../utils/api'
 import ChatThread from '../components/ChatThread'
 import './Dashboard.scss'
 
@@ -46,7 +46,7 @@ export default function Dashboard() {
   const saveTimer = useRef(null)
 
   // ── Conversation / chat state ────────────────────────────────
-  const [conversation, setConversation] = useState(null)  // { id, status }
+  const [conversation, setConversation] = useState(null)  // { id, idea_id, status }
   const [messages, setMessages] = useState([])            // MessageRead[]
   const [isSending, setIsSending] = useState(false)
   const [sendError, setSendError] = useState('')
@@ -55,6 +55,9 @@ export default function Dashboard() {
   // ── History state ────────────────────────────────────────────
   const [ideas, setIdeas] = useState([])
   const [loadingIdeas, setLoadingIdeas] = useState(true)
+  const [openingIdeaId, setOpeningIdeaId] = useState(null)  // idea.id currently loading
+  const [deleteConfirm, setDeleteConfirm] = useState(null)   // idea pending deletion
+  const [deleting, setDeleting] = useState(false)
 
   // ── Auth guard ───────────────────────────────────────────────
   useEffect(() => { if (!user) navigate('/login') }, [])
@@ -101,10 +104,55 @@ export default function Dashboard() {
       setText('')
       localStorage.removeItem(DRAFT_KEY)
       setActiveNav('chat')
+      fetchIdeas()
     } catch {
       setInputError('Could not reach the backend. Make sure the API server is running.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // ── Re-open a past idea's chat ───────────────────────────────
+  const handleOpenIdeaChat = async (idea) => {
+    setOpeningIdeaId(idea.id)
+    try {
+      const res = await getIdeaConversation(idea.id)
+      const { conversation: conv, messages: msgs } = res.data
+      setConversation(conv)
+      setMessages(msgs)
+      setShowReadyBanner(conv.status === 'ready_to_task')
+      setSendError('')
+      setActiveNav('chat')
+    } catch {
+      // no conversation yet or error — nothing to open
+    } finally {
+      setOpeningIdeaId(null)
+    }
+  }
+
+  // ── Delete idea ──────────────────────────────────────────────
+  const handleDeleteIdea = (idea) => {
+    setDeleteConfirm(idea)
+  }
+
+  const confirmDeleteIdea = async () => {
+    if (!deleteConfirm) return
+    setDeleting(true)
+    try {
+      await deleteIdea(deleteConfirm.id)
+      setIdeas((prev) => prev.filter((i) => i.id !== deleteConfirm.id))
+      // If the active conversation belongs to this idea, clear it
+      if (conversation?.idea_id === deleteConfirm.id) {
+        setConversation(null)
+        setMessages([])
+        setShowReadyBanner(false)
+        if (activeNav === 'chat') setActiveNav('new')
+      }
+      setDeleteConfirm(null)
+    } catch {
+      // Keep modal open on error so user can retry
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -113,7 +161,6 @@ export default function Dashboard() {
     if (!conversation) return
     setSendError('')
 
-    // Optimistically show the user's message immediately
     const optimisticMsg = {
       id: `optimistic-${Date.now()}`,
       conversation_id: conversation.id,
@@ -130,10 +177,8 @@ export default function Dashboard() {
       const { conversation: conv, messages: msgs } = res.data
       setConversation(conv)
       setMessages(msgs)
-      // Show the ready banner only when the status freshly becomes ready_to_task
       if (conv.status === 'ready_to_task') setShowReadyBanner(true)
     } catch {
-      // Remove the optimistic message so the user knows it failed
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
       setSendError('Failed to send. Please try again.')
     } finally {
@@ -153,15 +198,8 @@ export default function Dashboard() {
     }
   }
 
-  // ── Continue chat — dismiss banner and keep chatting ─────────
-  const handleContinueChat = () => {
-    setShowReadyBanner(false)
-  }
-
-  // ── Back from chat to new idea ────────────────────────────────
-  const handleBackFromChat = () => {
-    setActiveNav('new')
-  }
+  const handleContinueChat = () => setShowReadyBanner(false)
+  const handleBackFromChat  = () => setActiveNav('new')
 
   const handleLogout = () => {
     localStorage.removeItem('aif_user')
@@ -174,6 +212,40 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
+
+      {/* ── Confirmation modal ─────────────────────────────────── */}
+      {deleteConfirm && (
+        <div className="confirm-overlay" onClick={() => !deleting && setDeleteConfirm(null)}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal__icon">
+              <span className="material-icons">delete_forever</span>
+            </div>
+            <h2 className="confirm-modal__title">Delete this idea?</h2>
+            <p className="confirm-modal__body">
+              This will permanently delete the idea and its entire chat history. This action cannot be undone.
+              <br /><br />
+              <span className="confirm-modal__preview">"{truncate(deleteConfirm.content, 80)}"</span>
+            </p>
+            <div className="confirm-modal__actions">
+              <button
+                className="confirm-modal__cancel"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="confirm-modal__confirm"
+                onClick={confirmDeleteIdea}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Mobile bottom tab bar ──────────────────────────────── */}
       <nav className="bottom-tabs">
         <button
@@ -388,6 +460,7 @@ export default function Dashboard() {
               <div className="ideas-list">
                 {ideas.map((idea) => {
                   const meta = STATUS_META[idea.status] ?? STATUS_META.pending
+                  const isLoading = openingIdeaId === idea.id
                   return (
                     <div key={idea.id} className="idea-card">
                       <div className="idea-card__top">
@@ -395,9 +468,33 @@ export default function Dashboard() {
                           <span className="material-icons">{meta.icon}</span>
                           {meta.label}
                         </span>
-                        <span className="idea-card__date">{formatDate(idea.created_at)}</span>
+                        <div className="idea-card__meta-right">
+                          <span className="idea-card__id">#{idea.id}</span>
+                          <span className="idea-card__date">{formatDate(idea.created_at)}</span>
+                        </div>
                       </div>
                       <p className="idea-card__content">{truncate(idea.content)}</p>
+                      <div className="idea-card__actions">
+                        <button
+                          className="idea-card__btn idea-card__btn--open"
+                          onClick={() => handleOpenIdeaChat(idea)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? (
+                            <><span className="idea-card__spinner" />Loading…</>
+                          ) : (
+                            <><span className="material-icons">forum</span>Open Chat</>
+                          )}
+                        </button>
+                        <button
+                          className="idea-card__btn idea-card__btn--delete"
+                          onClick={() => handleDeleteIdea(idea)}
+                          title="Delete idea"
+                        >
+                          <span className="material-icons">delete</span>
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   )
                 })}

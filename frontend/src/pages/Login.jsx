@@ -132,6 +132,11 @@ export default function Login() {
           </button>
         </form>
 
+        <p className="login-card__register">
+          Don't have an account?{' '}
+          <Link to="/register">Create one free</Link>
+        </p>
+
         <p className="login-card__back">
           <Link to="/">
             <span className="material-icons">arrow_back</span>
