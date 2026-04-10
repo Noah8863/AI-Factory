@@ -1,17 +1,36 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: 'http://localhost:8000/api',
 })
 
-// Add Bearer token to all requests
+// Add Bearer token to all requests (except preflight OPTIONS)
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('aif_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+  if (config.method !== 'options') {
+    const token = localStorage.getItem('aif_token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
   }
+  console.log(`📤 [${config.method.toUpperCase()}] ${config.url}`, config.data || {})
   return config
 })
+
+// Log all responses and errors
+api.interceptors.response.use(
+  (response) => {
+    console.log(`📥 [${response.status}] ${response.config.url}`, response.data)
+    return response
+  },
+  (error) => {
+    console.error(`❌ [${error.response?.status || 'NO_RESPONSE'}] ${error.config?.url}`, {
+      message: error.message,
+      data: error.response?.data,
+      status: error.response?.status,
+    })
+    return Promise.reject(error)
+  }
+)
 
 // ── Ideas ────────────────────────────────────────────────────────────────────
 export const submitIdea          = (content) => api.post('/ideas', { content })

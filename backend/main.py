@@ -1,3 +1,4 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,14 +15,30 @@ from api.routes.auth import router as auth_router
 from api.routes.users import router as users_router
 from api.routes.jira_auth import router as jira_auth_router
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Create all database tables on startup
 Base.metadata.create_all(bind=engine)
+logger.info("Database tables created/verified")
 
 app = FastAPI(title="AI Factory API", version="0.1.0")
 
+# IMPORTANT: CORS must be the FIRST middleware added so it runs LAST (after routers)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174", 
+        "http://localhost:5175",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,3 +59,13 @@ def root():
 @app.get("/hello")
 def hello():
     return {"message": "Hello, World!"}
+
+
+@app.get("/test-cors")
+def test_cors():
+    """Test endpoint to verify CORS is working"""
+    logger.info("test-cors endpoint called")
+    return {"status": "ok", "message": "CORS is working!"}
+
+
+

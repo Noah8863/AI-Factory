@@ -406,6 +406,12 @@ export default function Register() {
       const rawUsername = profile.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')
       const username = rawUsername.length >= 3 ? rawUsername : rawUsername + '_usr'
 
+      console.log('🔍 Attempting registration with:', {
+        email: profile.email.trim(),
+        username,
+        display_name: profile.displayName.trim(),
+      })
+
       const res = await api.post('/auth/register', {
         email:        profile.email.trim(),
         username,
@@ -413,6 +419,7 @@ export default function Register() {
         display_name: profile.displayName.trim(),
       })
 
+      console.log('✅ Registration successful:', res.data)
       const { access_token, user } = res.data
       localStorage.setItem('aif_token', access_token)
       localStorage.setItem('aif_user', JSON.stringify({
@@ -423,7 +430,30 @@ export default function Register() {
       }))
       navigate('/dashboard')
     } catch (err) {
-      setErrors({ submit: err.response?.data?.detail || 'Registration failed. Please try again.' })
+      console.error('❌ Registration error:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        headers: err.response?.headers,
+        fullError: err,
+      })
+      
+      let errorMsg = 'Registration failed. Please try again.'
+      
+      if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail
+      } else if (err.response?.status === 400) {
+        errorMsg = 'Invalid input. Please check your information.'
+      } else if (err.response?.status === 500) {
+        errorMsg = `Server error: ${err.response?.data?.detail || 'Unknown error'}`
+      } else if (err.message === 'Network Error') {
+        errorMsg = 'Network error. Make sure the backend is running at http://localhost:8000'
+      } else if (!err.response) {
+        errorMsg = `Error: ${err.message}. Check browser console for details.`
+      }
+      
+      setErrors({ submit: errorMsg })
     } finally {
       setSubmitting(false)
     }
