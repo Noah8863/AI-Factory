@@ -148,28 +148,17 @@
     align-items: center;
     position: relative;
     flex: 1;
-
-    &:first-child { align-items: flex-start; }
-    &:last-child  { align-items: flex-end; }
   }
 
   &__line {
     position: absolute;
-    top: 18px;
-    left: calc(50% + 18px);
-    right: calc(-50% + 18px);
+    top: 17px;        // vertically center on the 36px circles
+    left: -50%;       // start at the center of the PREVIOUS circle
+    right: 50%;       // end at the center of THIS circle
     height: 2px;
     background: $border-default;
     overflow: hidden;
-    transform: translateY(-50%);
     z-index: 0;
-
-    // Fix: the line spans between circles
-    // Reposition correctly
-    left: 50%;
-    right: -50%;
-    transform: none;
-    top: 17px;
   }
 
   &__line-fill {
@@ -786,8 +775,23 @@
     cursor: not-allowed;
     opacity: 0.65;
     font-family: inherit;
+    transition: $transition;
 
     .material-icons { font-size: 15px; }
+
+    &--enabled {
+      cursor: pointer;
+      opacity: 1;
+      color: $indigo;
+      border-color: rgba($indigo, 0.4);
+      background: rgba($indigo, 0.06);
+
+      &:hover {
+        background: rgba($indigo, 0.12);
+        border-color: rgba($indigo, 0.6);
+        transform: translateY(-1px);
+      }
+    }
   }
 }
 

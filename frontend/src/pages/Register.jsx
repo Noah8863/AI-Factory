@@ -280,7 +280,14 @@ function Step3({ errors, submitting, onBack, onCreate }) {
               <span>Auto-create tickets from your PM conversations.</span>
             </div>
           </div>
-          <button className="integration-card__btn" disabled>
+          <button
+            className="integration-card__btn integration-card__btn--enabled"
+            onClick={() => {
+              const token = localStorage.getItem('aif_token')
+              const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+              window.location.href = `${base}/api/auth/jira/login${token ? `?token=${token}` : ''}`
+            }}
+          >
             <span className="material-icons">link</span>
             Connect Jira
           </button>

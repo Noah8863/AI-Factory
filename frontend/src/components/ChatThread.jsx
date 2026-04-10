@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './ChatThread.scss'
+import ConnectionStatus from './ConnectionStatus'
 
 function parseMarkdownBold(text) {
   const parts = text.split(/\*\*(.*?)\*\*/g)
@@ -121,9 +122,12 @@ export default function ChatThread({
             </p>
           </div>
         </div>
-        <div className="chat-thread__header-badge">
-          <span className="material-icons">forum</span>
-          {messages.length} messages
+        <div className="chat-thread__header-controls">
+          <ConnectionStatus />
+          <div className="chat-thread__header-badge">
+            <span className="material-icons">forum</span>
+            {messages.length} messages
+          </div>
         </div>
       </div>
 

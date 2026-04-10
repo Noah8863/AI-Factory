@@ -134,7 +134,7 @@ export default function Login() {
 
         <p className="login-card__register">
           Don't have an account?{' '}
-          <Link to="/register">Create one free</Link>
+          <Link to="/register">Create one for free</Link>
         </p>
 
         <p className="login-card__back">

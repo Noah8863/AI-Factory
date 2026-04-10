@@ -1,0 +1,485 @@
+@use '../styles/variables' as *;
+
+// ─── Root ─────────────────────────────────────────────────────────────────────
+.js-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+// ─── Header row ───────────────────────────────────────────────────────────────
+.js-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  &__left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__jira-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, rgba(#0052cc, 0.3), rgba(#0065ff, 0.2));
+    border: 1px solid rgba(#0065ff, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    .material-icons {
+      font-size: 15px;
+      color: #4d9fff;
+    }
+  }
+
+  &__title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: $text-primary;
+    letter-spacing: 0.01em;
+  }
+}
+
+// ─── Connection status badge ──────────────────────────────────────────────────
+.js-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: $radius-full;
+
+  &__dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  &--on {
+    background: rgba($emerald, 0.1);
+    color: $emerald;
+    border: 1px solid rgba($emerald, 0.25);
+
+    .js-status__dot { background: $emerald; }
+  }
+
+  &--off {
+    background: rgba($text-tertiary, 0.08);
+    color: $text-tertiary;
+    border: 1px solid rgba($text-tertiary, 0.15);
+
+    .js-status__dot { background: $text-tertiary; }
+  }
+}
+
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
+.js-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+
+  &__bar {
+    height: 14px;
+    border-radius: 7px;
+    background: linear-gradient(
+      90deg,
+      $bg-elevated 25%,
+      $bg-hover 50%,
+      $bg-elevated 75%
+    );
+    background-size: 200% 100%;
+    animation: js-shimmer 1.5s ease-in-out infinite;
+
+    &--long  { width: 100%; }
+    &--short { width: 55%; }
+  }
+}
+
+// ─── Error banner ─────────────────────────────────────────────────────────────
+.js-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba($rose, 0.07);
+  border: 1px solid rgba($rose, 0.2);
+  border-radius: $radius-md;
+  font-size: 0.8125rem;
+  color: $rose;
+
+  > .material-icons { font-size: 16px; flex-shrink: 0; }
+
+  > span:not(.material-icons) { flex: 1; line-height: 1.4; }
+
+  &__retry {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: rgba($rose, 0.1);
+    border: 1px solid rgba($rose, 0.25);
+    border-radius: $radius-md;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: $rose;
+    cursor: pointer;
+    font-family: inherit;
+    transition: $transition;
+
+    .material-icons { font-size: 13px; }
+
+    &:hover { background: rgba($rose, 0.18); }
+  }
+}
+
+// ─── Disconnected prompt ──────────────────────────────────────────────────────
+.js-disconnected {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  background: $bg-elevated;
+  border: 1px dashed $border-default;
+  border-radius: $radius-lg;
+
+  &__icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: $bg-hover;
+    border: 1px solid $border-default;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .material-icons { font-size: 18px; color: $text-tertiary; }
+  }
+
+  &__text {
+    font-size: 0.8375rem;
+    color: $text-secondary;
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  &__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba($indigo, 0.1);
+    border: 1px solid rgba($indigo, 0.35);
+    border-radius: $radius-md;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $indigo;
+    cursor: pointer;
+    font-family: inherit;
+    transition: $transition;
+
+    .material-icons { font-size: 15px; }
+
+    &:hover {
+      background: rgba($indigo, 0.18);
+      border-color: rgba($indigo, 0.5);
+      transform: translateY(-1px);
+    }
+  }
+}
+
+// ─── Dropdown wrapper ─────────────────────────────────────────────────────────
+.js-dropdown {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+// ─── Trigger button ───────────────────────────────────────────────────────────
+.js-trigger {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  border-radius: $radius-md;
+  cursor: pointer;
+  font-family: inherit;
+  transition: $transition;
+  min-width: 0;
+
+  &:hover {
+    background: $bg-hover;
+    border-color: $border-strong;
+  }
+
+  &--open {
+    border-color: $indigo;
+    background: $bg-hover;
+    box-shadow: 0 0 0 3px rgba($indigo, 0.1);
+  }
+
+  &__content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  &__name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $text-primary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__placeholder {
+    font-size: 0.875rem;
+    color: $text-tertiary;
+  }
+
+  &__chevron {
+    font-size: 18px !important;
+    color: $text-tertiary;
+    transition: transform 0.22s $ease-out;
+    flex-shrink: 0;
+
+    &--up { transform: rotate(180deg); }
+  }
+}
+
+// ─── Key badge ────────────────────────────────────────────────────────────────
+.js-key-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background: rgba(#0052cc, 0.2);
+  border: 1px solid rgba(#0065ff, 0.3);
+  border-radius: 5px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #4d9fff;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+// ─── Save badge ───────────────────────────────────────────────────────────────
+.js-save-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  animation: js-fade-in 0.2s $ease-out both;
+
+  .material-icons { font-size: 14px; }
+
+  &--saving {
+    color: $text-tertiary;
+  }
+
+  &--saved {
+    color: $emerald;
+  }
+
+  &--error {
+    color: $rose;
+  }
+
+  &__spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba($text-tertiary, 0.3);
+    border-top-color: $text-tertiary;
+    border-radius: 50%;
+    animation: js-spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+}
+
+// ─── Dropdown panel ───────────────────────────────────────────────────────────
+.js-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;   // matches trigger width
+  background: $bg-surface;
+  border: 1px solid $border-strong;
+  border-radius: $radius-lg;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 200;
+  overflow: hidden;
+  animation: js-panel-open 0.18s $ease-out both;
+}
+
+// ─── Search row ───────────────────────────────────────────────────────────────
+.js-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid $border-default;
+
+  > .material-icons {
+    font-size: 16px;
+    color: $text-tertiary;
+    flex-shrink: 0;
+  }
+}
+
+.js-search {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 0.875rem;
+  color: $text-primary;
+  font-family: inherit;
+
+  &::placeholder { color: $text-tertiary; }
+}
+
+.js-search-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: $text-tertiary;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 4px;
+  transition: $transition;
+
+  .material-icons { font-size: 15px; }
+
+  &:hover { color: $text-secondary; }
+}
+
+// ─── Project list ─────────────────────────────────────────────────────────────
+.js-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+
+  // Custom scrollbar
+  scrollbar-width: thin;
+  scrollbar-color: $border-strong transparent;
+
+  &::-webkit-scrollbar       { width: 5px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb {
+    background: $border-strong;
+    border-radius: 99px;
+  }
+
+  &__empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 10px;
+    font-size: 0.8125rem;
+    color: $text-tertiary;
+    text-align: center;
+    justify-content: center;
+
+    .material-icons { font-size: 16px; }
+  }
+}
+
+// ─── Project option ───────────────────────────────────────────────────────────
+.js-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  list-style: none;
+
+  &:hover {
+    background: $bg-hover;
+  }
+
+  &--active {
+    background: rgba($indigo, 0.08);
+
+    &:hover { background: rgba($indigo, 0.12); }
+  }
+
+  &__name {
+    flex: 1;
+    font-size: 0.875rem;
+    color: $text-primary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  &__check {
+    font-size: 15px !important;
+    color: $indigo;
+    flex-shrink: 0;
+    animation: js-pop-in 0.25s $ease-out both;
+  }
+}
+
+// ─── Hint text ────────────────────────────────────────────────────────────────
+.js-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 0.78rem;
+  color: $text-tertiary;
+  line-height: 1.5;
+  margin: 0;
+
+  .material-icons { font-size: 13px; margin-top: 2px; flex-shrink: 0; }
+}
+
+// ─── Keyframes ────────────────────────────────────────────────────────────────
+@keyframes js-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes js-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes js-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes js-panel-open {
+  from { opacity: 0; transform: translateY(-6px) scaleY(0.96); transform-origin: top; }
+  to   { opacity: 1; transform: translateY(0)    scaleY(1);    transform-origin: top; }
+}
+
+@keyframes js-pop-in {
+  from { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  to   { transform: scale(1);   opacity: 1; }
+}

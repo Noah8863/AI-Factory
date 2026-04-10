@@ -19,3 +19,19 @@ class ConversationRead(BaseModel):
 class ConversationDetail(BaseModel):
     conversation: ConversationRead
     messages: list[MessageRead]
+
+
+class TaskingResult(BaseModel):
+    """
+    Returned by POST /conversations/{id}/start-tasking.
+
+    Extends ConversationDetail with the outcome of the ticket-generation phase:
+    - tickets:              the full ticket payload from the PM agent (or None)
+    - jira_tickets_created: list of Jira issues that were actually created
+    - jira_error:           non-None when Jira is connected but the push failed
+    """
+    conversation:          ConversationRead
+    messages:              list[MessageRead]
+    tickets:               dict | None          = None
+    jira_tickets_created:  list[dict]           = []
+    jira_error:            str | None           = None

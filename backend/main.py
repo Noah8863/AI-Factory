@@ -12,6 +12,7 @@ from api.routes.ideas import router as ideas_router
 from api.routes.conversations import router as conversations_router
 from api.routes.auth import router as auth_router
 from api.routes.users import router as users_router
+from api.routes.jira_auth import router as jira_auth_router
 
 # Create all database tables on startup
 Base.metadata.create_all(bind=engine)
@@ -26,10 +27,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(ideas_router)
-app.include_router(conversations_router)
+app.include_router(auth_router, prefix="/api")
+app.include_router(jira_auth_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
+app.include_router(ideas_router, prefix="/api")
+app.include_router(conversations_router, prefix="/api")
 
 
 @app.get("/")

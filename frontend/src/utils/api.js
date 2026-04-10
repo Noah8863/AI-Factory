@@ -4,6 +4,15 @@ const api = axios.create({
   baseURL: '/api',
 })
 
+// Add Bearer token to all requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('aif_token')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
 // ── Ideas ────────────────────────────────────────────────────────────────────
 export const submitIdea          = (content) => api.post('/ideas', { content })
 export const getIdeas            = ()        => api.get('/ideas')

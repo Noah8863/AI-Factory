@@ -105,6 +105,15 @@
   @media (max-width: 480px) { display: none; }
 }
 
+.chat-thread__header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+
+  @media (max-width: 640px) { gap: 8px; }
+}
+
 // ─── Messages area ────────────────────────────────────────────────────────────
 
 .chat-thread__messages {
