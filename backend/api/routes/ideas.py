@@ -4,16 +4,22 @@ from db.database import get_db
 from models.idea import Idea
 from models.conversation import Conversation
 from models.message import Message
+from models.user import User
 from schemas.idea import IdeaCreate, IdeaRead
 from schemas.conversation import ConversationDetail, ConversationRead
 from schemas.message import MessageRead
+from services.auth_service import get_current_user
 
 router = APIRouter(prefix="/ideas", tags=["ideas"])
 
 
 @router.post("", response_model=IdeaRead, status_code=201)
-def create_idea(payload: IdeaCreate, db: Session = Depends(get_db)):
-    idea = Idea(content=payload.content)
+def create_idea(
+    payload: IdeaCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    idea = Idea(content=payload.content, user_id=current_user.id)
     db.add(idea)
     db.commit()
     db.refresh(idea)
@@ -21,22 +27,38 @@ def create_idea(payload: IdeaCreate, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[IdeaRead])
-def list_ideas(db: Session = Depends(get_db)):
-    return db.query(Idea).order_by(Idea.created_at.desc()).all()
+def list_ideas(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(Idea)
+        .filter(Idea.user_id == current_user.id)
+        .order_by(Idea.created_at.desc())
+        .all()
+    )
 
 
 @router.get("/{idea_id}", response_model=IdeaRead)
-def get_idea(idea_id: int, db: Session = Depends(get_db)):
-    idea = db.query(Idea).filter(Idea.id == idea_id).first()
+def get_idea(
+    idea_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    idea = db.query(Idea).filter(Idea.id == idea_id, Idea.user_id == current_user.id).first()
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
     return idea
 
 
 @router.get("/{idea_id}/conversation", response_model=ConversationDetail)
-def get_idea_conversation(idea_id: int, db: Session = Depends(get_db)):
+def get_idea_conversation(
+    idea_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Return the most recent conversation (with full message history) for an idea."""
-    idea = db.query(Idea).filter(Idea.id == idea_id).first()
+    idea = db.query(Idea).filter(Idea.id == idea_id, Idea.user_id == current_user.id).first()
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
 
@@ -62,9 +84,13 @@ def get_idea_conversation(idea_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{idea_id}", status_code=204)
-def delete_idea(idea_id: int, db: Session = Depends(get_db)):
+def delete_idea(
+    idea_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Delete an idea and all its conversations and messages."""
-    idea = db.query(Idea).filter(Idea.id == idea_id).first()
+    idea = db.query(Idea).filter(Idea.id == idea_id, Idea.user_id == current_user.id).first()
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
 
