@@ -31,7 +31,7 @@ TASKING_ACTION_MESSAGE = "ACTION: Start tasking. Generate the Jira tickets now."
 
 # ─── LLM caller ───────────────────────────────────────────────────────────────
 
-def _call_llm(history: list[dict]) -> str:
+def _call_llm(history: list[dict], max_tokens: int = 512) -> str:
     """
     Sends the conversation history to Claude and returns the raw reply text.
 
@@ -40,7 +40,7 @@ def _call_llm(history: list[dict]) -> str:
     """
     response = _client.messages.create(
         model=_MODEL,
-        max_tokens=1024,
+        max_tokens=max_tokens,
         system=PM_SYSTEM_PROMPT,
         messages=history,
     )
@@ -100,12 +100,18 @@ async def run_tasking(
     # ── 1. Build history including the trigger message ────────────
     tasking_history = history + [{"role": "user", "content": TASKING_ACTION_MESSAGE}]
 
-    # ── 2. Call LLM ───────────────────────────────────────────────
-    raw    = _call_llm(tasking_history)
+    # ── 2. Call LLM — use a high token limit so the full JSON is never truncated
+    raw    = _call_llm(tasking_history, max_tokens=4096)
     parsed = parse_agent_reply(raw)
 
     agent_reply = parsed["displayText"]
     tickets     = parsed.get("tickets")  # dict with "tickets" list, or None
+
+    if tickets is None:
+        logger.warning(
+            "run_tasking: LLM response did not contain parseable ticket JSON. "
+            "Raw output (first 500 chars): %s", raw[:500]
+        )
 
     # ── 3. Push to Jira if possible ───────────────────────────────
     jira_results: list[dict] = []
@@ -115,20 +121,34 @@ async def run_tasking(
         ticket_list = tickets.get("tickets", [])
         if ticket_list:
             try:
-                jira_results = await push_tickets_to_jira(
+                raw_results = await push_tickets_to_jira(
                     user_id=user_id,
                     db=db,
                     tickets=ticket_list,
                 )
+                # Separate successfully created tickets from per-ticket API errors
+                jira_results = [r for r in raw_results if "key" in r]
+                failed       = [r for r in raw_results if "error" in r]
+
                 if jira_results:
                     logger.info(
                         "%d Jira ticket(s) created for user %s.",
                         len(jira_results),
                         user_id,
                     )
+                if failed:
+                    titles = ", ".join(f["title"] for f in failed)
+                    first_err = failed[0].get("error", "unknown error")
+                    jira_error = (
+                        f"{len(failed)} ticket(s) failed to create ({titles}). "
+                        f"Jira API error: {first_err}"
+                    )
+                    logger.warning(
+                        "Jira ticket creation partial failure for user %s: %s",
+                        user_id,
+                        jira_error,
+                    )
             except JiraServiceError as exc:
-                # Non-fatal: log the error and surface it to the caller, but
-                # do not prevent the conversation from transitioning to "tasking".
                 jira_error = str(exc)
                 logger.warning(
                     "Jira ticket creation failed for user %s: %s",

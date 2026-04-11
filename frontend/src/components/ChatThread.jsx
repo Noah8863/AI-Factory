@@ -110,7 +110,7 @@ export default function ChatThread({
         setPhraseIndex(i => (i + 1) % TASKING_PHRASES.length)
         setPhraseVisible(true)
       }, 300) // wait for fade-out then swap text and fade in
-    }, 1400) // total time per phrase (1.4s gives 1.1s visible + 0.3s fade)
+    }, 2300) // total time per phrase (2.3s gives 2s visible + 0.3s fade)
 
     return () => clearInterval(cycle)
   }, [isTaskingLoading])

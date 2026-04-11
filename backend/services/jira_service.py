@@ -286,6 +286,7 @@ async def _create_single_ticket(
     cloud_id:    str,
     project_key: str,
     ticket:      dict,
+    issue_type:  str = "Task",
 ) -> dict:
     """
     Create a single Jira issue.  Returns {"id": ..., "key": ..., "url": ...}.
@@ -310,7 +311,7 @@ async def _create_single_ticket(
             "project":     {"key": project_key},
             "summary":     ticket.get("title", "(No title)"),
             "description": _build_adf_description(ticket.get("description", "")),
-            "issuetype":   {"name": "Story"},
+            "issuetype":   {"name": issue_type},
             "priority":    {"name": priority_name},
             "labels":      labels,
         }
@@ -350,6 +351,50 @@ async def _create_single_ticket(
         "title": ticket.get("title"),
         "url":   f"{site_url}/browse/{created['key']}",
     }
+
+
+# ── Issue type resolution ─────────────────────────────────────────────────────
+
+# Preferred issue type names in priority order.  The first one that exists in
+# the target project is used; if none match we fall back to whatever the
+# project offers first.
+_PREFERRED_ISSUE_TYPES = ["Task", "Story", "Bug", "Subtask", "Sub-task"]
+
+
+async def _get_project_issue_type(access_token: str, cloud_id: str, project_key: str) -> str:
+    """
+    Fetch the issue types available for *project_key* and return the best match.
+    Prefers Task > Story > Bug, then falls back to the first available type.
+    """
+    url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project/{project_key}"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get(
+                url,
+                headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+            )
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "Could not fetch project issue types (%s): %s — defaulting to 'Task'.",
+                exc.response.status_code, exc.response.text,
+            )
+            return "Task"
+
+    issue_types = [it["name"] for it in resp.json().get("issueTypes", [])]
+    logger.info("Available issue types for project %s: %s", project_key, issue_types)
+
+    for preferred in _PREFERRED_ISSUE_TYPES:
+        if preferred in issue_types:
+            logger.info("Using issue type '%s' for project %s.", preferred, project_key)
+            return preferred
+
+    # Fall back to whatever the project has
+    if issue_types:
+        logger.info("Using fallback issue type '%s' for project %s.", issue_types[0], project_key)
+        return issue_types[0]
+
+    return "Task"  # last resort
 
 
 # ── Main public entry point ───────────────────────────────────────────────────
@@ -395,14 +440,18 @@ async def push_tickets_to_jira(
         project_key = await _get_first_project_key(access_token, cloud_id)
         logger.info("Using Jira project '%s' for ticket creation.", project_key)
 
+    # ── Step 3: resolve issue type for this project ──────────────
+    issue_type = await _get_project_issue_type(access_token, cloud_id, project_key)
+
     # ── Step 4: create tickets (sequentially to respect rate limits) ──
     results = []
     for ticket in tickets:
-        result = await _create_single_ticket(access_token, cloud_id, project_key, ticket)
+        result = await _create_single_ticket(access_token, cloud_id, project_key, ticket, issue_type)
         results.append(result)
         logger.info(
-            "Jira ticket created: %s — %s",
-            result.get("key", "ERROR"),
+            "Jira ticket %s: %s — %s",
+            "created" if "key" in result else "FAILED",
+            result.get("key", result.get("error", "?")),
             ticket.get("title", "?"),
         )
 
