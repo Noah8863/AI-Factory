@@ -566,6 +566,7 @@ export default function Dashboard() {
             taskingResult={taskingResult}
             isTaskingLoading={isTaskingLoading}
             repoUrl={conversation.github_repo_url ?? null}
+            hasBeenTasked={!!conversation.jira_project_key}
             jiraStatus={jiraStatus}
             jiraRequiredMessage={JIRA_REQUIRED_MESSAGE}
             onSendMessage={handleSendMessage}

@@ -87,6 +87,7 @@ export default function ChatThread({
   taskingResult,
   isTaskingLoading,
   repoUrl,
+  hasBeenTasked,
   onSendMessage,
   onContinueChat,
   onStartTasking,
@@ -318,29 +319,43 @@ export default function ChatThread({
 
       {/* ── Input ──────────────────────────────────────────────── */}
       {!isTasking && !isDone && (
-        <div className="chat-thread__input-bar">
-          <textarea
-            ref={inputRef}
-            className="chat-thread__input"
-            placeholder={isJiraBlocked ? 'Connect Jira to continue chatting' : 'Reply to the PM agent…'}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            disabled={isSending || isJiraBlocked}
-          />
-          <button
-            className="chat-thread__send"
-            onClick={handleSend}
-            disabled={isJiraBlocked || !input.trim() || isSending}
-            aria-label="Send message"
-          >
-            <span className="material-icons">send</span>
-          </button>
-        </div>
+        <>
+          <div className="chat-thread__input-bar">
+            <textarea
+              ref={inputRef}
+              className="chat-thread__input"
+              placeholder={isJiraBlocked ? 'Connect Jira to continue chatting' : 'Reply to the PM agent…'}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              disabled={isSending || isJiraBlocked}
+            />
+            <button
+              className="chat-thread__send"
+              onClick={handleSend}
+              disabled={isJiraBlocked || !input.trim() || isSending}
+              aria-label="Send message"
+            >
+              <span className="material-icons">send</span>
+            </button>
+          </div>
+          {hasBeenTasked && (
+            <div className="chat-thread__retask-bar">
+              <button
+                className="chat-thread__retask-btn"
+                onClick={onStartTasking}
+                disabled={isJiraBlocked}
+              >
+                <span className="material-icons">rocket_launch</span>
+                Start Building
+              </button>
+            </div>
+          )}
+        </>
       )}
 
-      {/* ── Done: Add more requirements ────────────────────────── */}
+      {/* ── Done: Add requirements ─────────────────────────────── */}
       {isDone && (
         <div className="chat-thread__add-more">
           <button
@@ -348,7 +363,7 @@ export default function ChatThread({
             onClick={onAddMoreRequirements}
           >
             <span className="material-icons">add_circle_outline</span>
-            Add more requirements
+            Add Requirements
           </button>
         </div>
       )}
