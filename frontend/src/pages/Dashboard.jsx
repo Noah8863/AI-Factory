@@ -506,6 +506,7 @@ export default function Dashboard() {
             showReadyBanner={showReadyBanner}
             taskingResult={taskingResult}
             isTaskingLoading={isTaskingLoading}
+            repoUrl={conversation.github_repo_url ?? null}
             onSendMessage={handleSendMessage}
             onContinueChat={handleContinueChat}
             onStartTasking={handleStartTasking}

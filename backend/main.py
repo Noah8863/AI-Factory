@@ -1,6 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from db.database import Base, engine
 from models import idea as _idea_model              # noqa: F401
@@ -26,6 +27,17 @@ logger = logging.getLogger(__name__)
 # Create all database tables on startup
 Base.metadata.create_all(bind=engine)
 logger.info("Database tables created/verified")
+
+# Add new columns to existing tables (idempotent — safe to run on every boot)
+with engine.connect() as _conn:
+    _conn.execute(text(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS github_repo_name VARCHAR(255)"
+    ))
+    _conn.execute(text(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS github_repo_url VARCHAR(512)"
+    ))
+    _conn.commit()
+logger.info("Column migrations applied")
 
 app = FastAPI(title="AI Factory API", version="0.1.0")
 

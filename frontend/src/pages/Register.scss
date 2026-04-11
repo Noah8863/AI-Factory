@@ -153,9 +153,9 @@
 
   &__line {
     position: absolute;
-    top: 17px;        // vertically center on the 36px circles
-    left: -50%;       // start at the center of the PREVIOUS circle
-    right: 50%;       // end at the center of THIS circle
+    top: 17px;                     // vertically center on the 36px circles
+    left: calc(-50% + 20px);       // start just past the edge of the PREVIOUS circle
+    right: calc(50% + 20px);       // end just before the edge of THIS circle
     height: 2px;
     background: $border-default;
     overflow: hidden;
@@ -703,6 +703,11 @@
 
   &:nth-child(2) { animation-delay: 0.08s; }
 
+  &--connected {
+    border-color: rgba($emerald, 0.4);
+    background: rgba($emerald, 0.04);
+  }
+
   &:hover {
     border-color: $border-strong;
     background: $bg-hover;
@@ -793,6 +798,36 @@
         transform: translateY(-1px);
       }
     }
+  }
+
+  &__badge {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    border-radius: $radius-md;
+    font-size: 0.8125rem;
+    font-weight: 600;
+
+    .material-icons { font-size: 15px; }
+
+    &--ok {
+      color: $emerald;
+      background: rgba($emerald, 0.1);
+      border: 1px solid rgba($emerald, 0.3);
+    }
+  }
+
+  &__info-connected {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: $emerald;
+    font-size: 0.8rem;
+    font-weight: 600;
+
+    .material-icons { font-size: 14px; }
   }
 }
 
@@ -938,10 +973,22 @@
 
     .material-icons { font-size: 17px; }
 
-    &:hover {
+    &:hover:not(:disabled) {
       transform: translateY(-2px);
       box-shadow: 0 0 32px rgba($indigo, 0.45);
     }
+
+    &:disabled { opacity: 0.75; cursor: not-allowed; }
+  }
+
+  &__spinner {
+    width: 15px;
+    height: 15px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
   }
 }
 

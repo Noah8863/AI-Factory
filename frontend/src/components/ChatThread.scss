@@ -590,6 +590,15 @@
   &__sub--warn {
     color: $amber;
   }
+
+  &__repo-link {
+    color: $indigo;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+
+    &:hover { opacity: 0.8; }
+  }
 }
 
 // ─── Add-more-requirements bar ────────────────────────────────────────────────
@@ -713,100 +722,6 @@
   }
 }
 
-// ─── [DEV] GitHub repo strip ──────────────────────────────────────────────────
-
-.dev-strip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 8px 16px;
-  background: repeating-linear-gradient(
-    -45deg,
-    rgba($amber, 0.06) 0px,
-    rgba($amber, 0.06) 6px,
-    transparent 6px,
-    transparent 12px
-  );
-  border-bottom: 1px dashed rgba($amber, 0.35);
-  flex-shrink: 0;
-
-  &__badge {
-    font-size: 0.625rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: $amber;
-    background: rgba($amber, 0.15);
-    border: 1px solid rgba($amber, 0.3);
-    border-radius: $radius-sm;
-    padding: 2px 6px;
-  }
-
-  &__label {
-    font-size: 0.75rem;
-    color: $text-tertiary;
-  }
-
-  &__btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 12px;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: #0f172a;
-    background: $amber;
-    border: none;
-    border-radius: $radius-md;
-    cursor: pointer;
-    transition: $transition;
-
-    .material-icons { font-size: 1rem; }
-
-    &:hover:not(:disabled) {
-      filter: brightness(1.1);
-      transform: translateY(-1px);
-    }
-
-    &--loading {
-      opacity: 0.75;
-    }
-  }
-
-  &__spinner {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border: 2px solid rgba(#0f172a, 0.3);
-    border-top-color: #0f172a;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-  }
-
-  &__result {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 0.8rem;
-
-    .material-icons { font-size: 0.9rem; }
-
-    a {
-      font-weight: 600;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-
-    &--ok {
-      color: $emerald;
-      a { color: $emerald; }
-    }
-
-    &--err {
-      color: $rose;
-    }
-  }
-}
 
 @keyframes spin {
   to { transform: rotate(360deg); }

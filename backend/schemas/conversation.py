@@ -11,6 +11,8 @@ class ConversationRead(BaseModel):
     id: int
     idea_id: int
     status: str
+    github_repo_name: str | None = None
+    github_repo_url:  str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -18,6 +18,7 @@ from schemas.conversation import (
 )
 from schemas.message import MessageCreate, MessageRead
 from services import pm_agent
+from services.github_service import create_org_repo
 from models.user import User
 from services.auth_service import SECRET_KEY, ALGORITHM, get_current_user
 
@@ -237,6 +238,33 @@ async def start_tasking(
         user_id=user_id,
         db=db,
     )
+
+    # ── Create GitHub repo on first tasking run ───────────────────
+    # Only create the repo once. On re-tasking the conversation already has
+    # github_repo_url set, so we skip creation to avoid duplicate repos.
+    if conversation.github_repo_url is None:
+        repo_name = (result.get("tickets") or {}).get("githubRepoName")
+        if repo_name:
+            repo_result = create_org_repo(repo_name)
+            if repo_result:
+                conversation.github_repo_name = repo_name
+                conversation.github_repo_url  = repo_result["url"]
+                logger.info(
+                    "GitHub repo %r created for conversation %s: %s",
+                    repo_name, conversation_id, repo_result["url"],
+                )
+            else:
+                logger.warning(
+                    "GitHub repo creation failed for conversation %s (repo_name=%r). "
+                    "Continuing without a repo.",
+                    conversation_id, repo_name,
+                )
+        else:
+            logger.warning(
+                "start_tasking: PM agent did not return a githubRepoName for "
+                "conversation %s — skipping repo creation.",
+                conversation_id,
+            )
 
     # ── Persist the trigger message + friendly agent confirmation ───
     # The raw LLM reply (result["agent_reply"]) is the JSON dump used to

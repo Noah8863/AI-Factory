@@ -67,9 +67,4 @@ export const reopenConversation = (conversationId) =>
 export const declineTasking = (conversationId) =>
   api.post(`/conversations/${conversationId}/decline-tasking`)
 
-// ── Dev / testing ────────────────────────────────────────────────────────────
-/** [DEV] Directly create a GitHub repo in the org without going through the PM flow. */
-export const devCreateGithubRepo = (repoName) =>
-  api.post('/dev/create-github-repo', { repo_name: repoName })
-
 export default api

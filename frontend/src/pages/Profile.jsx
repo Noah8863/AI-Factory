@@ -28,7 +28,6 @@ export default function Profile() {
 
   // Integration statuses
   const [jiraStatus, setJiraStatus] = useState('loading')  // 'loading' | 'connected' | 'disconnected'
-  const [githubStatus, setGithubStatus] = useState('loading')
 
   // Jira project selection
   const [jiraProjects, setJiraProjects] = useState([])         // [{ key, name, id }]
@@ -42,10 +41,6 @@ export default function Profile() {
     api.get('/auth/jira/status')
       .then(res => setJiraStatus(res.data.connected ? 'connected' : 'disconnected'))
       .catch(() => setJiraStatus('disconnected'))
-
-    api.get('/auth/github/status')
-      .then(res => setGithubStatus(res.data.connected ? 'connected' : 'disconnected'))
-      .catch(() => setGithubStatus('disconnected'))
   }, [])
 
   // Fetch Jira projects once we know the user is connected
@@ -115,12 +110,6 @@ export default function Profile() {
     const token = localStorage.getItem('aif_token')
     const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     if (token) window.location.href = `${base}/api/auth/jira/login?token=${token}`
-  }
-
-  const handleConnectGitHub = () => {
-    const token = localStorage.getItem('aif_token')
-    const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
-    if (token) window.location.href = `${base}/api/auth/github/login?token=${token}`
   }
 
   const initials = (displayName || user?.username || 'U')[0].toUpperCase()
@@ -361,46 +350,6 @@ export default function Profile() {
                     )}
                   </div>
                 )}
-              </div>
-
-              {/* GitHub */}
-              <div className={`intg-row ${githubStatus === 'disconnected' ? 'intg-row--error' : ''}`}>
-                <div className="intg-row__logo intg-row__logo--github">
-                  <span className="material-icons">code</span>
-                </div>
-                <div className="intg-row__info">
-                  <p className="intg-row__name">GitHub</p>
-                  <p className="intg-row__desc">Code repository and version control</p>
-                </div>
-                <div className="intg-row__right">
-                  {githubStatus === 'loading' ? (
-                    <span className="intg-badge intg-badge--loading">
-                      <span className="intg-badge__spinner" />
-                      Checking…
-                    </span>
-                  ) : githubStatus === 'connected' ? (
-                    <span className="intg-badge intg-badge--connected">
-                      <span className="material-icons">check_circle</span>
-                      Connected
-                    </span>
-                  ) : (
-                    <span className="intg-badge intg-badge--disconnected">
-                      <span className="material-icons">error</span>
-                      GitHub Disconnected
-                    </span>
-                  )}
-                  {githubStatus !== 'loading' && (
-                    <button
-                      className={`intg-btn ${githubStatus === 'connected' ? 'intg-btn--secondary' : 'intg-btn--primary'}`}
-                      onClick={handleConnectGitHub}
-                    >
-                      <span className="material-icons">
-                        {githubStatus === 'connected' ? 'refresh' : 'add_link'}
-                      </span>
-                      {githubStatus === 'connected' ? 'Reconnect' : 'Connect GitHub'}
-                    </button>
-                  )}
-                </div>
               </div>
 
             </div>

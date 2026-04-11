@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../utils/api'
 import { useTheme } from '../context/ThemeContext'
@@ -6,9 +6,9 @@ import './Register.scss'
 
 // ── Step metadata ─────────────────────────────────────────────────────────────
 const STEPS = [
-  { id: 1, label: 'Profile',      icon: 'person_outline' },
-  { id: 2, label: 'Preferences',  icon: 'tune'           },
-  { id: 3, label: 'Integrations', icon: 'extension'      },
+  { id: 1, label: 'Profile',     icon: 'person_outline' },
+  { id: 2, label: 'Preferences', icon: 'tune'           },
+  { id: 3, label: 'Connect Jira', icon: 'task_alt'      },
 ]
 
 // ── Password strength meter ───────────────────────────────────────────────────
@@ -258,90 +258,69 @@ function Step2({ prefs, setPrefs }) {
   )
 }
 
-// ── Step 3: Integrations ──────────────────────────────────────────────────────
-function Step3({ errors, submitting, onBack, onCreate }) {
+// ── Step 3: Connect Jira ──────────────────────────────────────────────────────
+function Step3({ jiraConnected, onConnectJira, onFinish }) {
   return (
     <div className="reg-step__content">
       <div className="reg-step__header">
         <div className="reg-step__icon-wrap reg-step__icon-wrap--sky">
           <span className="material-icons">hub</span>
         </div>
-        <h2 className="reg-step__title">Connect your tools</h2>
+        <h2 className="reg-step__title">Connect Jira</h2>
         <p className="reg-step__sub">
-          Link your external services to unlock the full AI Factory experience.
-          You can always do this later from settings.
+          Link your Jira account so the PM agent can automatically create tickets for your projects.
         </p>
       </div>
 
       <div className="integration-cards">
-        {/* Jira */}
-        <div className="integration-card">
+        <div className={`integration-card ${jiraConnected ? 'integration-card--connected' : ''}`}>
           <div className="integration-card__left">
             <div className="integration-card__logo integration-card__logo--jira">
               <span className="material-icons">task_alt</span>
             </div>
             <div className="integration-card__info">
               <strong>Jira</strong>
-              <span>Auto-create tickets from your PM conversations.</span>
+              {jiraConnected ? (
+                <span className="integration-card__info-connected">
+                  <span className="material-icons">check_circle</span>
+                  Successfully connected!
+                </span>
+              ) : (
+                <span>Auto-create tickets from your PM conversations.</span>
+              )}
             </div>
           </div>
-          <button
-            className="integration-card__btn integration-card__btn--enabled"
-            onClick={() => {
-              const token = localStorage.getItem('aif_token')
-              const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
-              window.location.href = `${base}/api/auth/jira/login${token ? `?token=${token}` : ''}`
-            }}
-          >
-            <span className="material-icons">link</span>
-            Connect Jira
-          </button>
-        </div>
-
-        {/* GitHub */}
-        <div className="integration-card">
-          <div className="integration-card__left">
-            <div className="integration-card__logo integration-card__logo--github">
-              <span className="material-icons">code</span>
-            </div>
-            <div className="integration-card__info">
-              <strong>GitHub</strong>
-              <span>Push generated code directly to your repositories.</span>
-            </div>
-          </div>
-          <button className="integration-card__btn" disabled>
-            <span className="material-icons">link</span>
-            Connect GitHub
-          </button>
+          {jiraConnected ? (
+            <span className="integration-card__badge integration-card__badge--ok">
+              <span className="material-icons">check_circle</span>
+              Connected
+            </span>
+          ) : (
+            <button
+              className="integration-card__btn integration-card__btn--enabled"
+              onClick={onConnectJira}
+            >
+              <span className="material-icons">link</span>
+              Connect Jira
+            </button>
+          )}
         </div>
       </div>
 
-      <p className="integration-skip">
-        <span className="material-icons">info</span>
-        Integrations can be connected anytime from your account settings.
-      </p>
-
-      {errors.submit && (
-        <div className="reg-error">
-          <span className="material-icons">error_outline</span>
-          {errors.submit}
-        </div>
+      {!jiraConnected && (
+        <p className="integration-skip">
+          <span className="material-icons">open_in_new</span>
+          Jira will open in a new tab. Come back here once you've signed in.
+        </p>
       )}
 
-      {/* Final CTA lives inside step 3 for visual prominence */}
       <button
         className="reg-create-btn"
-        onClick={onCreate}
-        disabled={submitting}
+        onClick={onFinish}
+        disabled={!jiraConnected}
       >
-        {submitting ? (
-          <><span className="reg-create-btn__spinner" />Creating your account…</>
-        ) : (
-          <>
-            <span className="material-icons">auto_awesome</span>
-            Create Account
-          </>
-        )}
+        <span className="material-icons">check_circle</span>
+        Finish Setup
       </button>
     </div>
   )
@@ -368,10 +347,12 @@ export default function Register() {
     personality: 'balanced',
   })
 
-  const [errors, setErrors]         = useState({})
-  const [submitting, setSubmitting] = useState(false)
-  const [showPwd, setShowPwd]       = useState(false)
-  const [showConf, setShowConf]     = useState(false)
+  const [errors, setErrors]             = useState({})
+  const [accountCreated, setAccCreated] = useState(false)
+  const [creating, setCreating]         = useState(false) // loading on "Continue" from Step 2
+  const [jiraConnected, setJiraConn]    = useState(false)
+  const [showPwd, setShowPwd]           = useState(false)
+  const [showConf, setShowConf]         = useState(false)
 
   const transition = (next, dir) => {
     setDir(dir)
@@ -394,8 +375,59 @@ export default function Register() {
     return !Object.keys(e).length
   }
 
-  const handleNext = () => {
+  // ── Create account (called when advancing from Step 2 → 3) ───────────────
+  const doCreateAccount = async () => {
+    const rawUsername = profile.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')
+    const username = rawUsername.length >= 3 ? rawUsername : rawUsername + '_usr'
+
+    const res = await api.post('/auth/register', {
+      email:        profile.email.trim(),
+      username,
+      password:     profile.password,
+      display_name: profile.displayName.trim(),
+    })
+
+    const { access_token, user } = res.data
+    if (!access_token || !user) {
+      throw new Error(`Unexpected response shape: ${JSON.stringify(res.data)}`)
+    }
+    localStorage.setItem('aif_token', access_token)
+    localStorage.setItem('aif_user', JSON.stringify({
+      id:           user.id,
+      username:     user.username,
+      email:        user.email,
+      display_name: user.display_name,
+    }))
+  }
+
+  const handleNext = async () => {
     if (step === 1 && !validateStep1()) return
+
+    if (step === 2) {
+      // Account already created (user went Back and came forward again)
+      if (accountCreated) {
+        transition(3, 'forward')
+        return
+      }
+      // Create account before advancing to Step 3
+      setCreating(true)
+      setErrors({})
+      try {
+        await doCreateAccount()
+        setAccCreated(true)
+        transition(3, 'forward')
+      } catch (err) {
+        let msg = 'Registration failed. Please try again.'
+        if (err.response?.data?.detail)      msg = err.response.data.detail
+        else if (err.response?.status === 400) msg = 'Invalid input. Please check your information.'
+        else if (err.message === 'Network Error') msg = 'Network error. Make sure the backend is running.'
+        setErrors({ submit: msg })
+      } finally {
+        setCreating(false)
+      }
+      return
+    }
+
     if (step < 3) transition(step + 1, 'forward')
   }
 
@@ -403,71 +435,31 @@ export default function Register() {
     if (step > 1) transition(step - 1, 'back')
   }
 
-  const handleCreate = async () => {
-    setSubmitting(true)
-    setErrors({})
-    try {
-      // Derive a valid username from email prefix
-      const rawUsername = profile.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')
-      const username = rawUsername.length >= 3 ? rawUsername : rawUsername + '_usr'
+  // ── Poll Jira status while on Step 3 ────────────────────────────────────
+  useEffect(() => {
+    if (step !== 3 || jiraConnected) return
+    const token = localStorage.getItem('aif_token')
+    if (!token) return
 
-      console.log('🔍 Attempting registration with:', {
-        email: profile.email.trim(),
-        username,
-        display_name: profile.displayName.trim(),
-      })
-
-      const res = await api.post('/auth/register', {
-        email:        profile.email.trim(),
-        username,
-        password:     profile.password,
-        display_name: profile.displayName.trim(),
-      })
-
-      console.log('✅ Registration successful:', res.data)
-      const { access_token, user } = res.data
-      if (!access_token || !user) {
-        throw new Error(`Unexpected response shape: ${JSON.stringify(res.data)}`)
-      }
-      localStorage.setItem('aif_token', access_token)
-      localStorage.setItem('aif_user', JSON.stringify({
-        id:           user.id,
-        username:     user.username,
-        email:        user.email,
-        display_name: user.display_name,
-      }))
-      navigate('/dashboard')
-    } catch (err) {
-      console.error('❌ Registration error:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        headers: err.response?.headers,
-        fullError: err,
-      })
-      
-      let errorMsg = 'Registration failed. Please try again.'
-      
-      if (err.response?.data?.detail) {
-        errorMsg = err.response.data.detail
-      } else if (err.response?.status === 400) {
-        errorMsg = 'Invalid input. Please check your information.'
-      } else if (err.response?.status === 500) {
-        errorMsg = `Server error: ${err.response?.data?.detail || 'Unknown error'}`
-      } else if (err.message === 'Network Error') {
-        errorMsg = 'Network error. Make sure the backend is running at http://localhost:8001'
-      } else if (!err.response) {
-        errorMsg = `Error: ${err.message}. Check browser console for details.`
-      }
-      
-      setErrors({ submit: errorMsg })
-    } finally {
-      setSubmitting(false)
+    // Check immediately on mount, then every 2.5s
+    const check = async () => {
+      try {
+        const res = await api.get('/auth/jira/status')
+        if (res.data.connected) setJiraConn(true)
+      } catch { /* non-fatal */ }
     }
+    check()
+    const interval = setInterval(check, 2500)
+    return () => clearInterval(interval)
+  }, [step, jiraConnected])
+
+  const handleConnectJira = () => {
+    const token = localStorage.getItem('aif_token')
+    const base  = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
+    window.open(`${base}/api/auth/jira/login?token=${token}`, '_blank')
   }
 
-  const completedSteps = step - 1
+  const handleFinish = () => navigate('/dashboard')
 
   return (
     <div className="reg-page">
@@ -541,26 +533,36 @@ export default function Register() {
           )}
           {step === 3 && (
             <Step3
-              errors={errors}
-              submitting={submitting}
-              onBack={handleBack}
-              onCreate={handleCreate}
+              jiraConnected={jiraConnected}
+              onConnectJira={handleConnectJira}
+              onFinish={handleFinish}
             />
           )}
         </div>
 
+        {/* Submit error (shown between step content and nav row) */}
+        {errors.submit && (
+          <div className="reg-error">
+            <span className="material-icons">error_outline</span>
+            {errors.submit}
+          </div>
+        )}
+
         {/* Navigation row */}
         <div className={`reg-nav ${step > 1 ? 'reg-nav--split' : ''}`}>
           {step > 1 && (
-            <button className="reg-nav__back" onClick={handleBack}>
+            <button className="reg-nav__back" onClick={handleBack} disabled={creating}>
               <span className="material-icons">arrow_back</span>
               Back
             </button>
           )}
           {step < 3 && (
-            <button className="reg-nav__next" onClick={handleNext}>
-              Continue
-              <span className="material-icons">arrow_forward</span>
+            <button className="reg-nav__next" onClick={handleNext} disabled={creating}>
+              {creating ? (
+                <><span className="reg-nav__spinner" />Creating…</>
+              ) : (
+                <>Continue<span className="material-icons">arrow_forward</span></>
+              )}
             </button>
           )}
         </div>
