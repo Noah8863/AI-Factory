@@ -38,6 +38,8 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://127.0.0.1:5174",
         "http://127.0.0.1:5175",
+        "https://ai-factory-production-1f41.up.railway.app",
+        "https://ai-factory-production-bb66.up.railway.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
