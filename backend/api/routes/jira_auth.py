@@ -59,7 +59,8 @@ JIRA_SCOPES = " ".join([
     "read:jira-user",
     "read:jira-work",
     "write:jira-work",
-    "offline_access",   # grants a refresh_token
+    "manage:jira-project",   # required to create new Jira projects
+    "offline_access",        # grants a refresh_token
 ])
 
 # Short TTL for the state JWT (10 minutes — only needs to survive the redirect round-trip)
