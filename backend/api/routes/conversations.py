@@ -279,41 +279,62 @@ async def start_tasking(
                 conversation_id,
             )
 
-    # ── 2. Create Jira project (first tasking only) ──────────────
-    jira_cloud_id:      str | None = None
+    # ── 2. Resolve Jira project from user's profile selection ────
+    # (Auto-create logic is temporarily disabled — see commented block below)
+    jira_cloud_id:        str | None = None
     jira_tickets_created: list[dict] = []
     jira_error:           str | None = None
 
     if conversation.jira_project_key is None:
-        raw_project_key = tickets_data.get("jiraProjectKey")
-        project_name    = tickets_data.get("projectName", "AI Factory Project")
-        if raw_project_key:
-            try:
-                proj_result = await create_jira_project(
-                    user_id=user_id,
-                    db=db,
-                    project_key=raw_project_key,
-                    project_name=project_name,
-                )
-                conversation.jira_project_key = proj_result["project_key"]
-                conversation.jira_project_url = proj_result["project_url"]
-                jira_cloud_id = proj_result["cloud_id"]
-                logger.info(
-                    "Jira project %r created for conversation %s: %s",
-                    proj_result["project_key"], conversation_id, proj_result["project_url"],
-                )
-            except JiraServiceError as exc:
-                jira_error = f"Jira project creation failed: {exc}"
-                logger.warning(
-                    "Jira project creation failed for conversation %s: %s",
-                    conversation_id, exc,
-                )
-        else:
-            logger.warning(
-                "start_tasking: PM agent did not return a jiraProjectKey for "
-                "conversation %s — skipping Jira project creation.",
-                conversation_id,
+        token_row = db.query(JiraToken).filter(JiraToken.user_id == user_id).first()
+        if token_row and token_row.jira_project_key:
+            conversation.jira_project_key = token_row.jira_project_key
+            jira_cloud_id = token_row.jira_cloud_id
+            logger.info(
+                "Using user-selected Jira project '%s' for conversation %s.",
+                token_row.jira_project_key, conversation_id,
             )
+        else:
+            jira_error = (
+                "No Jira project selected. Please choose a target project "
+                "in your Profile settings before starting a build."
+            )
+            logger.warning(
+                "start_tasking: no Jira project selected for user %s (conversation %s).",
+                user_id, conversation_id,
+            )
+
+    # ── AUTO-CREATE (disabled — re-enable when Jira scope issues are resolved) ──
+    # if conversation.jira_project_key is None:
+    #     raw_project_key = tickets_data.get("jiraProjectKey")
+    #     project_name    = tickets_data.get("projectName", "AI Factory Project")
+    #     if raw_project_key:
+    #         try:
+    #             proj_result = await create_jira_project(
+    #                 user_id=user_id,
+    #                 db=db,
+    #                 project_key=raw_project_key,
+    #                 project_name=project_name,
+    #             )
+    #             conversation.jira_project_key = proj_result["project_key"]
+    #             conversation.jira_project_url = proj_result["project_url"]
+    #             jira_cloud_id = proj_result["cloud_id"]
+    #             logger.info(
+    #                 "Jira project %r created for conversation %s: %s",
+    #                 proj_result["project_key"], conversation_id, proj_result["project_url"],
+    #             )
+    #         except JiraServiceError as exc:
+    #             jira_error = f"Jira project creation failed: {exc}"
+    #             logger.warning(
+    #                 "Jira project creation failed for conversation %s: %s",
+    #                 conversation_id, exc,
+    #             )
+    #     else:
+    #         logger.warning(
+    #             "start_tasking: PM agent did not return a jiraProjectKey for "
+    #             "conversation %s — skipping Jira project creation.",
+    #             conversation_id,
+    #         )
 
     # ── 3. Push tickets to the Jira project ─────────────────────
     effective_project_key = conversation.jira_project_key

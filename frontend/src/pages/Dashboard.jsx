@@ -37,7 +37,7 @@ function truncate(str, n = 160) {
 export default function Dashboard() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('aif_user') || 'null')
-  const avatar = localStorage.getItem('aif_avatar')
+  const avatar = localStorage.getItem(`aif_avatar_${user?.id}`)
 
   // ── Nav & view state ────────────────────────────────────────
   const [activeNav, setActiveNav] = useState('new')

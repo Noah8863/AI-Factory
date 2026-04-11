@@ -14,8 +14,9 @@ export default function Profile() {
     if (!user) navigate('/login')
   }, [])
 
-  // Avatar — stored as base64 in localStorage
-  const [avatar, setAvatar] = useState(() => localStorage.getItem('aif_avatar') || null)
+  // Avatar — stored as base64 in localStorage, keyed by user ID to prevent bleed-over between accounts
+  const avatarKey = `aif_avatar_${user?.id}`
+  const [avatar, setAvatar] = useState(() => localStorage.getItem(avatarKey) || null)
   const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef(null)
 
@@ -35,13 +36,50 @@ export default function Profile() {
       .catch(() => setJiraStatus('disconnected'))
   }, [])
 
+  // Jira project selection
+  const [jiraProjects, setJiraProjects] = useState([])
+  const [jiraCloudId, setJiraCloudId] = useState('')
+  const [selectedProject, setSelectedProject] = useState('')
+  const [loadingProjects, setLoadingProjects] = useState(false)
+  const [projectSaving, setProjectSaving] = useState(false)
+  const [projectSaveMsg, setProjectSaveMsg] = useState('')
+
+  useEffect(() => {
+    if (jiraStatus !== 'connected') return
+    setLoadingProjects(true)
+    api.get('/auth/jira/projects')
+      .then(res => {
+        setJiraProjects(res.data.projects || [])
+        setJiraCloudId(res.data.cloud_id || '')
+        setSelectedProject(res.data.selected_project_key || '')
+      })
+      .catch(() => {})
+      .finally(() => setLoadingProjects(false))
+  }, [jiraStatus])
+
+  const handleProjectSelect = async (projectKey) => {
+    setSelectedProject(projectKey)
+    if (!projectKey) return
+    setProjectSaving(true)
+    setProjectSaveMsg('')
+    try {
+      await api.patch('/auth/jira/project', { project_key: projectKey, cloud_id: jiraCloudId })
+      setProjectSaveMsg('Project saved!')
+      setTimeout(() => setProjectSaveMsg(''), 3000)
+    } catch {
+      setProjectSaveMsg('Failed to save project.')
+    } finally {
+      setProjectSaving(false)
+    }
+  }
+
   const loadAvatar = (file) => {
     if (!file || !file.type.startsWith('image/')) return
     const reader = new FileReader()
     reader.onload = (e) => {
       const b64 = e.target.result
       setAvatar(b64)
-      localStorage.setItem('aif_avatar', b64)
+      localStorage.setItem(avatarKey, b64)
     }
     reader.readAsDataURL(file)
   }
@@ -149,7 +187,7 @@ export default function Profile() {
                 {avatar && (
                   <button
                     className="avatar-meta__remove"
-                    onClick={() => { setAvatar(null); localStorage.removeItem('aif_avatar') }}
+                    onClick={() => { setAvatar(null); localStorage.removeItem(avatarKey) }}
                   >
                     <span className="material-icons">delete</span>
                     Remove photo
@@ -276,6 +314,55 @@ export default function Profile() {
                   </div>
                 </div>
 
+                {/* Project selector — shown once Jira is connected */}
+                {jiraStatus === 'connected' && (
+                  <div className="intg-project">
+                    <p className="intg-project__label">
+                      <span className="material-icons">folder</span>
+                      Target Jira Project
+                    </p>
+                    {loadingProjects ? (
+                      <div className="intg-project__loading">
+                        <span className="intg-project__spinner" />
+                        Loading projects…
+                      </div>
+                    ) : jiraProjects.length === 0 ? (
+                      <p className="intg-project__empty">No projects found in your Jira workspace.</p>
+                    ) : (
+                      <div className="intg-project__row">
+                        <select
+                          className="intg-project__select"
+                          value={selectedProject}
+                          onChange={(e) => handleProjectSelect(e.target.value)}
+                          disabled={projectSaving}
+                        >
+                          <option value="">— Select a project —</option>
+                          {jiraProjects.map((p) => (
+                            <option key={p.key} value={p.key}>
+                              [{p.key}] {p.name}
+                            </option>
+                          ))}
+                        </select>
+                        {projectSaving && <span className="intg-project__spinner" />}
+                        {projectSaveMsg && !projectSaving && (
+                          projectSaveMsg.startsWith('Failed') ? (
+                            <span className="intg-project__err">{projectSaveMsg}</span>
+                          ) : (
+                            <span className="intg-project__ok">
+                              <span className="material-icons">check_circle</span>
+                              {projectSaveMsg}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    )}
+                    {!loadingProjects && jiraProjects.length > 0 && (
+                      <p className="intg-project__hint">
+                        All tickets generated by the PM agent will be sent to this project.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
             </div>
