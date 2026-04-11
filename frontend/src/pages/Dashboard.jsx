@@ -62,6 +62,7 @@ export default function Dashboard() {
   const [openingIdeaId, setOpeningIdeaId] = useState(null)  // idea.id currently loading
   const [deleteConfirm, setDeleteConfirm] = useState(null)   // idea pending deletion
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   // ── Auth guard ───────────────────────────────────────────────
   useEffect(() => { if (!user) navigate('/login') }, [])
@@ -136,12 +137,14 @@ export default function Dashboard() {
 
   // ── Delete idea ──────────────────────────────────────────────
   const handleDeleteIdea = (idea) => {
+    setDeleteError('')
     setDeleteConfirm(idea)
   }
 
   const confirmDeleteIdea = async () => {
     if (!deleteConfirm) return
     setDeleting(true)
+    setDeleteError('')
     try {
       await deleteIdea(deleteConfirm.id)
       setIdeas((prev) => prev.filter((i) => i.id !== deleteConfirm.id))
@@ -154,7 +157,7 @@ export default function Dashboard() {
       }
       setDeleteConfirm(null)
     } catch {
-      // Keep modal open on error so user can retry
+      setDeleteError('Failed to delete. Please try again.')
     } finally {
       setDeleting(false)
     }
@@ -239,7 +242,7 @@ export default function Dashboard() {
 
       {/* ── Confirmation modal ─────────────────────────────────── */}
       {deleteConfirm && (
-        <div className="confirm-overlay" onClick={() => !deleting && setDeleteConfirm(null)}>
+        <div className="confirm-overlay" onClick={() => !deleting && (setDeleteConfirm(null), setDeleteError(''))}>
           <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="confirm-modal__icon">
               <span className="material-icons">delete_forever</span>
@@ -250,10 +253,13 @@ export default function Dashboard() {
               <br /><br />
               <span className="confirm-modal__preview">"{truncate(deleteConfirm.content, 80)}"</span>
             </p>
+            {deleteError && (
+              <p className="confirm-modal__error">{deleteError}</p>
+            )}
             <div className="confirm-modal__actions">
               <button
                 className="confirm-modal__cancel"
-                onClick={() => setDeleteConfirm(null)}
+                onClick={() => { setDeleteConfirm(null); setDeleteError('') }}
                 disabled={deleting}
               >
                 Cancel

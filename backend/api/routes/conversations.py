@@ -18,7 +18,8 @@ from schemas.conversation import (
 )
 from schemas.message import MessageCreate, MessageRead
 from services import pm_agent
-from services.auth_service import SECRET_KEY, ALGORITHM
+from models.user import User
+from services.auth_service import SECRET_KEY, ALGORITHM, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -57,13 +58,17 @@ def _build_llm_history(messages: list[Message]) -> list[dict]:
 
 
 @router.post("", response_model=ConversationDetail, status_code=201)
-def create_conversation(payload: ConversationCreate, db: Session = Depends(get_db)):
+def create_conversation(
+    payload: ConversationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Creates an idea, a conversation, the user's opening message,
     and the PM agent's first clarifying response — all in one shot.
     """
-    # 1. Persist the idea
-    idea = Idea(content=payload.content)
+    # 1. Persist the idea (associated with the logged-in user)
+    idea = Idea(content=payload.content, user_id=current_user.id)
     db.add(idea)
     db.flush()
 

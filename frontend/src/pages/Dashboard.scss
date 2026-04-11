@@ -838,6 +838,16 @@
     font-style: italic;
   }
 
+  &__error {
+    font-size: 0.8125rem;
+    color: $rose;
+    background: rgba($rose, 0.08);
+    border: 1px solid rgba($rose, 0.2);
+    border-radius: $radius-md;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+  }
+
   &__actions {
     display: flex;
     gap: 10px;
