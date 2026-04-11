@@ -77,7 +77,7 @@ def create_org_repo(repo_name: str) -> dict | None:
     Returns None on failure.
     """
     token = os.getenv("GITHUB_TOKEN")
-    org_name = "AI-Factory-Labs"
+    org_name = "AI-Factory-Repos"
 
     url = f"https://api.github.com/orgs/{org_name}/repos"
 
