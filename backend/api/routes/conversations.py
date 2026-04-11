@@ -23,6 +23,17 @@ from services.auth_service import SECRET_KEY, ALGORITHM, get_current_user
 
 logger = logging.getLogger(__name__)
 
+# ── Post-tasking agent messages (stored in DB, shown in chat) ────────────────
+TASKING_COMPLETE_AGENT_MESSAGE = (
+    "Jira tickets have been made! I'll start tasking out these requirements to an "
+    "AI agent. Would you like to continue defining the scope?"
+)
+TASKING_DECLINED_AGENT_MESSAGE = (
+    "Sounds good! If you need any additional requirements handled, come back and "
+    "click on the 'Add more requirements' button on the bottom to start chatting "
+    "with me again."
+)
+
 # Optional bearer: does not raise 401 when the header is absent, so
 # unauthenticated callers can still use conversations (Jira is simply skipped).
 _optional_bearer = HTTPBearer(auto_error=False)
@@ -119,8 +130,8 @@ def send_message(
     conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
-    if conversation.status == "tasking":
-        raise HTTPException(status_code=400, detail="Conversation is already in tasking mode")
+    if conversation.status in ("tasking", "done"):
+        raise HTTPException(status_code=400, detail="Conversation is not open for new messages.")
 
     # Store the new user message
     db.add(Message(
@@ -180,8 +191,8 @@ async def start_tasking(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    if conversation.status == "tasking":
-        raise HTTPException(status_code=400, detail="Conversation is already in tasking mode.")
+    if conversation.status in ("tasking", "done"):
+        raise HTTPException(status_code=400, detail="Conversation is not in a taskable state.")
 
     # ── Resolve caller identity (optional auth) ───────────────────
     # If an Authorization header is present and valid, we use that user_id
@@ -194,14 +205,31 @@ async def start_tasking(
         except (JWTError, KeyError, ValueError):
             logger.debug("start_tasking: bearer token present but invalid — skipping Jira.")
 
-    # ── Build full conversation history for the LLM ───────────────
+    # ── Load all messages, then slice to post-checkpoint window ──
+    # On a re-tasking run the user has already had one round of ticket generation.
+    # We find the last "ACTION: Start tasking" trigger in the stored messages and
+    # use only messages that came AFTER it (plus the confirmation reply that
+    # immediately followed), so the PM only sees NEW requirements — not the
+    # original ones that were already ticketed.
     existing_messages = (
         db.query(Message)
         .filter(Message.conversation_id == conversation_id)
         .order_by(Message.created_at)
         .all()
     )
-    llm_history = _build_llm_history(existing_messages)
+
+    last_action_idx: int | None = None
+    for i, msg in enumerate(existing_messages):
+        if msg.role == "user" and msg.content == pm_agent.TASKING_ACTION_MESSAGE:
+            last_action_idx = i
+
+    if last_action_idx is not None:
+        # Skip the trigger message (+1) and the agent reply that followed it (+2)
+        checkpoint_messages = existing_messages[last_action_idx + 2:]
+    else:
+        checkpoint_messages = existing_messages
+
+    llm_history = _build_llm_history(checkpoint_messages)
 
     # ── Call PM agent (generates tickets + optionally creates in Jira) ──
     result = await pm_agent.run_tasking(
@@ -210,7 +238,11 @@ async def start_tasking(
         db=db,
     )
 
-    # ── Persist the trigger message + agent reply ─────────────────
+    # ── Persist the trigger message + friendly agent confirmation ───
+    # The raw LLM reply (result["agent_reply"]) is the JSON dump used to
+    # create Jira tickets — we intentionally do NOT store it in the chat
+    # thread.  Instead we store a human-readable confirmation so the PM's
+    # response is what actually surfaces in the UI.
     db.add(Message(
         conversation_id=conversation_id,
         role="user",
@@ -219,7 +251,7 @@ async def start_tasking(
     db.add(Message(
         conversation_id=conversation_id,
         role="agent",
-        content=result["agent_reply"],
+        content=TASKING_COMPLETE_AGENT_MESSAGE,
     ))
 
     # ── Transition conversation status ────────────────────────────
@@ -248,3 +280,46 @@ async def start_tasking(
         jira_tickets_created=result.get("jira_tickets_created", []),
         jira_error=result.get("jira_error"),
     )
+
+
+@router.post("/{conversation_id}/reopen", response_model=ConversationDetail)
+def reopen_conversation(conversation_id: int, db: Session = Depends(get_db)):
+    """
+    Transitions a 'tasking' or 'done' conversation back to 'active' so the user
+    can continue chatting with the PM agent to define additional requirements.
+    Called when the user clicks "Yes" or "Add more requirements".
+    """
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if conversation.status not in ("tasking", "done"):
+        raise HTTPException(status_code=400, detail="Conversation is not in a reopenable state.")
+
+    conversation.status = "active"
+    db.commit()
+    db.refresh(conversation)
+    return _build_detail(conversation, db)
+
+
+@router.post("/{conversation_id}/decline-tasking", response_model=ConversationDetail)
+def decline_tasking(conversation_id: int, db: Session = Depends(get_db)):
+    """
+    Called when the user clicks "No" after tickets have been generated.
+    Stores the PM's closing message and transitions the conversation to 'done'.
+    The user can still reopen via the 'Add more requirements' button.
+    """
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    if conversation.status != "tasking":
+        raise HTTPException(status_code=400, detail="Conversation is not in a declinable state.")
+
+    db.add(Message(
+        conversation_id=conversation_id,
+        role="agent",
+        content=TASKING_DECLINED_AGENT_MESSAGE,
+    ))
+    conversation.status = "done"
+    db.commit()
+    db.refresh(conversation)
+    return _build_detail(conversation, db)

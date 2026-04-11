@@ -88,12 +88,16 @@ export default function ChatThread({
   onSendMessage,
   onContinueChat,
   onStartTasking,
+  onYesContinue,
+  onNoClose,
+  onAddMoreRequirements,
   onBack,
 }) {
   const [input, setInput] = useState('')
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const isTasking = status === 'tasking'
+  const isDone    = status === 'done'
 
   // ── [DEV] GitHub repo creation ────────────────────────────────────────────
   const [repoState, setRepoState]   = useState('idle') // idle | loading | success | error
@@ -141,7 +145,7 @@ export default function ChatThread({
 
   const handleSend = () => {
     const trimmed = input.trim()
-    if (!trimmed || isSending || isTasking) return
+    if (!trimmed || isSending || isTasking || isDone) return
     setInput('')
     onSendMessage(trimmed)
     inputRef.current?.focus()
@@ -292,52 +296,51 @@ export default function ChatThread({
         </div>
       )}
 
-      {/* ── Tasking in progress ────────────────────────────────── */}
-      {isTasking && !taskingResult && (
-        <div className="chat-tasking-banner">
-          <div className="chat-tasking-banner__spinner" />
-          <div>
-            <p className="chat-tasking-banner__title">Generating tasks…</p>
-            <p className="chat-tasking-banner__sub">
-              The PM agent is breaking your idea into development tasks.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ── Tasking complete ───────────────────────────────────── */}
-      {isTasking && taskingResult && (
-        <div className={`chat-tasking-banner chat-tasking-banner--done ${taskingResult.jira_error ? 'chat-tasking-banner--warn' : ''}`}>
-          <span className="material-icons">
-            {taskingResult.jira_error ? 'warning' : 'check_circle'}
-          </span>
-          <div>
-            {taskingResult.jira_error ? (
-              <>
-                <p className="chat-tasking-banner__title">Tickets generated — Jira sync failed</p>
-                <p className="chat-tasking-banner__sub">{taskingResult.jira_error}</p>
-              </>
-            ) : taskingResult.jira_tickets_created?.length > 0 ? (
-              <>
-                <p className="chat-tasking-banner__title">
-                  {taskingResult.jira_tickets_created.length} ticket{taskingResult.jira_tickets_created.length !== 1 ? 's' : ''} created in Jira
+      {/* ── Post-tasking: Yes / No ─────────────────────────────── */}
+      {isTasking && !isTaskingLoading && (
+        <div className="chat-tasking-banner chat-tasking-banner--decision">
+          <div className="chat-tasking-banner__decision-body">
+            <span className="material-icons chat-tasking-banner__decision-icon">
+              {taskingResult?.jira_error ? 'warning' : 'check_circle'}
+            </span>
+            <div>
+              {taskingResult?.jira_error ? (
+                <p className="chat-tasking-banner__sub chat-tasking-banner__sub--warn">
+                  Jira sync failed: {taskingResult.jira_error}
                 </p>
+              ) : taskingResult?.jira_tickets_created?.length > 0 ? (
                 <p className="chat-tasking-banner__sub">
+                  {taskingResult.jira_tickets_created.length} ticket{taskingResult.jira_tickets_created.length !== 1 ? 's' : ''} synced to Jira
+                  &nbsp;·&nbsp;
                   {taskingResult.jira_tickets_created.map(t => t.key).join(' · ')}
                 </p>
-              </>
-            ) : (
-              <>
-                <p className="chat-tasking-banner__title">Tasks generated</p>
-                <p className="chat-tasking-banner__sub">Connect Jira on your profile to push tickets automatically.</p>
-              </>
-            )}
+              ) : null}
+            </div>
+          </div>
+          <p className="chat-tasking-banner__prompt">
+            Would you like to continue defining the scope?
+          </p>
+          <div className="chat-ready-banner__actions">
+            <button
+              className="chat-ready-banner__btn chat-ready-banner__btn--ghost"
+              onClick={onNoClose}
+            >
+              <span className="material-icons">close</span>
+              No
+            </button>
+            <button
+              className="chat-ready-banner__btn chat-ready-banner__btn--primary"
+              onClick={onYesContinue}
+            >
+              Yes
+              <span className="material-icons">arrow_forward</span>
+            </button>
           </div>
         </div>
       )}
 
       {/* ── Input ──────────────────────────────────────────────── */}
-      {!isTasking && (
+      {!isTasking && !isDone && (
         <div className="chat-thread__input-bar">
           <textarea
             ref={inputRef}
@@ -356,6 +359,19 @@ export default function ChatThread({
             aria-label="Send message"
           >
             <span className="material-icons">send</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── Done: Add more requirements ────────────────────────── */}
+      {isDone && (
+        <div className="chat-thread__add-more">
+          <button
+            className="chat-thread__add-more-btn"
+            onClick={onAddMoreRequirements}
+          >
+            <span className="material-icons">add_circle_outline</span>
+            Add more requirements
           </button>
         </div>
       )}

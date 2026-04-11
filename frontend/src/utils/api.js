@@ -59,6 +59,14 @@ export const sendMessage = (conversationId, content) =>
 export const startTasking = (conversationId) =>
   api.post(`/conversations/${conversationId}/start-tasking`)
 
+/** Reopen a tasking/done conversation for additional requirements (Yes / Add more). */
+export const reopenConversation = (conversationId) =>
+  api.post(`/conversations/${conversationId}/reopen`)
+
+/** Decline further requirements after tasking — transitions to 'done'. */
+export const declineTasking = (conversationId) =>
+  api.post(`/conversations/${conversationId}/decline-tasking`)
+
 // ── Dev / testing ────────────────────────────────────────────────────────────
 /** [DEV] Directly create a GitHub repo in the org without going through the PM flow. */
 export const devCreateGithubRepo = (repoName) =>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea } from '../utils/api'
+import { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking } from '../utils/api'
 import ChatThread from '../components/ChatThread'
 import Navbar from '../components/Navbar'
 import './Dashboard.scss'
@@ -126,6 +126,7 @@ export default function Dashboard() {
       setConversation(conv)
       setMessages(msgs)
       setShowReadyBanner(conv.status === 'ready_to_task')
+      setTaskingResult(null)
       setSendError('')
       setActiveNav('chat')
     } catch {
@@ -214,6 +215,49 @@ export default function Dashboard() {
 
   const handleContinueChat = () => setShowReadyBanner(false)
   const handleBackFromChat  = () => { setActiveNav('new'); setTaskingResult(null) }
+
+  // ── Post-tasking: user clicked "Yes, keep defining scope" ────
+  const handleYesContinue = async () => {
+    if (!conversation) return
+    try {
+      const res = await reopenConversation(conversation.id)
+      const { conversation: conv, messages: msgs } = res.data
+      setConversation(conv)
+      setMessages(msgs)
+      setTaskingResult(null)
+      setShowReadyBanner(false)
+    } catch {
+      setSendError('Failed to reopen conversation. Please try again.')
+    }
+  }
+
+  // ── Post-tasking: user clicked "No" ─────────────────────────
+  const handleNoClose = async () => {
+    if (!conversation) return
+    try {
+      const res = await declineTasking(conversation.id)
+      const { conversation: conv, messages: msgs } = res.data
+      setConversation(conv)
+      setMessages(msgs)
+    } catch {
+      setSendError('Something went wrong. Please try again.')
+    }
+  }
+
+  // ── "Add more requirements" — same as Yes ───────────────────
+  const handleAddMoreRequirements = async () => {
+    if (!conversation) return
+    try {
+      const res = await reopenConversation(conversation.id)
+      const { conversation: conv, messages: msgs } = res.data
+      setConversation(conv)
+      setMessages(msgs)
+      setTaskingResult(null)
+      setShowReadyBanner(false)
+    } catch {
+      setSendError('Failed to reopen conversation. Please try again.')
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('aif_user')
@@ -465,6 +509,9 @@ export default function Dashboard() {
             onSendMessage={handleSendMessage}
             onContinueChat={handleContinueChat}
             onStartTasking={handleStartTasking}
+            onYesContinue={handleYesContinue}
+            onNoClose={handleNoClose}
+            onAddMoreRequirements={handleAddMoreRequirements}
             onBack={handleBackFromChat}
           />
         )}

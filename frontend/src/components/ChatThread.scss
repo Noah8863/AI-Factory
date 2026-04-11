@@ -555,6 +555,76 @@
 
     .chat-tasking-banner__title { color: #fbbf24; }
   }
+
+  // Post-tasking decision state — Yes / No buttons
+  &--decision {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    background: rgba($emerald, 0.06);
+    border-top-color: rgba($emerald, 0.35);
+
+    .chat-ready-banner__actions {
+      justify-content: flex-end;
+    }
+  }
+
+  &__decision-body {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__decision-icon {
+    font-size: 22px !important;
+    color: $emerald !important;
+    flex-shrink: 0;
+  }
+
+  &__prompt {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: $text-primary;
+  }
+
+  &__sub--warn {
+    color: $amber;
+  }
+}
+
+// ─── Add-more-requirements bar ────────────────────────────────────────────────
+
+.chat-thread__add-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 20px;
+  border-top: 1px solid $border-subtle;
+  background: $bg-surface;
+  flex-shrink: 0;
+}
+
+.chat-thread__add-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: $indigo;
+  background: rgba($indigo, 0.1);
+  border: 1px solid rgba($indigo, 0.3);
+  border-radius: $radius-full;
+  cursor: pointer;
+  transition: $transition;
+
+  .material-icons { font-size: 1.1rem; }
+
+  &:hover {
+    background: rgba($indigo, 0.18);
+    border-color: rgba($indigo, 0.5);
+    transform: translateY(-1px);
+  }
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
