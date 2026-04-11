@@ -11,6 +11,24 @@ load_dotenv()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_USERNAME = os.getenv("GITHUB_USERNAME")
 
+def get_repo():
+    try:
+        return Repo(os.getcwd())
+    except Exception as e:
+        print(f"❌ Failed to get repo: {e}")
+        return None
+
+def prepare_branch(branch_name: str):
+    try:
+        repo = get_repo()
+        if not repo:
+            return False
+        repo.git.checkout('-b', branch_name)
+        return True
+    except Exception as e:
+        print(f"❌ Failed to prepare branch: {e}")
+        return False
+
 def commit_and_push(repo_name: str, branch_name: str, commit_message: str):
     repo = get_repo()
     if not repo:

@@ -528,6 +528,133 @@
   }
 }
 
+// ── Integration block (wraps row + project selector) ─────────────────────────
+
+.intg-block {
+  border: 1px solid $border-default;
+  border-radius: $radius-lg;
+  overflow: hidden;
+  background: $bg-elevated;
+  transition: $transition;
+
+  &--error {
+    border-color: rgba($rose, 0.3);
+    background: rgba($rose, 0.04);
+  }
+
+  // The top row inside a block needs no border/background of its own
+  .intg-row {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+  }
+}
+
+// ── Jira project selector ─────────────────────────────────────────────────────
+
+.intg-project {
+  padding: 12px 18px 16px;
+  border-top: 1px solid $border-subtle;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &__label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+
+    .material-icons { font-size: 15px; }
+  }
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__select {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    background: $bg-base;
+    border: 1px solid $border-default;
+    border-radius: $radius-md;
+    color: $text-primary;
+    font-size: 0.875rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: $transition;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 32px;
+
+    &:focus {
+      outline: none;
+      border-color: $indigo;
+      box-shadow: 0 0 0 3px rgba($indigo, 0.15);
+    }
+
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+  }
+
+  &__spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid $border-default;
+    border-top-color: $indigo;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  &__ok {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $emerald;
+    white-space: nowrap;
+
+    .material-icons { font-size: 15px; }
+  }
+
+  &__err {
+    font-size: 0.8125rem;
+    color: $rose;
+  }
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8125rem;
+    color: $text-tertiary;
+  }
+
+  &__empty {
+    font-size: 0.8125rem;
+    color: $text-tertiary;
+    font-style: italic;
+  }
+
+  &__hint {
+    font-size: 0.8125rem;
+    color: $text-tertiary;
+    margin-top: 2px;
+
+    strong { color: $text-secondary; }
+  }
+}
+
 // ── Theme picker ──────────────────────────────────────────────────────────────
 
 .theme-picker {

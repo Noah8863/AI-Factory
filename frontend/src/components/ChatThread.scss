@@ -3,6 +3,7 @@
 // ─── Thread container ─────────────────────────────────────────────────────────
 
 .chat-thread {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: calc(100vh - 0px);
@@ -385,6 +386,113 @@
   }
 }
 
+// ─── Tasking loading overlay ──────────────────────────────────────────────────
+
+.tasking-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg-base);
+  overflow: hidden;
+
+  // Soft glowing orb behind everything
+  &__orb {
+    position: absolute;
+    width: 340px;
+    height: 340px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba($indigo, 0.18) 0%, transparent 70%);
+    animation: orb-pulse 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  // Three concentric spinning rings
+  &__ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1.5px solid transparent;
+    pointer-events: none;
+
+    &--1 {
+      width: 160px;
+      height: 160px;
+      border-top-color: rgba($indigo, 0.6);
+      border-right-color: rgba($indigo, 0.2);
+      animation: ring-spin 1.4s linear infinite;
+    }
+
+    &--2 {
+      width: 200px;
+      height: 200px;
+      border-bottom-color: rgba($violet, 0.5);
+      border-left-color: rgba($violet, 0.15);
+      animation: ring-spin 2.2s linear infinite reverse;
+    }
+
+    &--3 {
+      width: 244px;
+      height: 244px;
+      border-top-color: rgba($indigo, 0.25);
+      border-right-color: rgba($violet, 0.1);
+      animation: ring-spin 3.4s linear infinite;
+    }
+  }
+
+  // Agent icon in the centre
+  &__icon {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, $indigo 0%, $violet 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 32px rgba($indigo, 0.45);
+    z-index: 1;
+
+    .material-icons {
+      font-size: 30px;
+      color: #fff;
+    }
+  }
+
+  // Cycling phrase — opacity driven by inline style for the JS fade
+  &__phrase {
+    position: relative;
+    z-index: 1;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: $text-primary;
+    letter-spacing: 0.01em;
+    transition: opacity 0.3s ease;
+    margin-top: 8px;
+  }
+
+  &__sub {
+    position: relative;
+    z-index: 1;
+    font-size: 0.8125rem;
+    color: $text-tertiary;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+}
+
+@keyframes orb-pulse {
+  0%, 100% { transform: scale(1);   opacity: 0.7; }
+  50%       { transform: scale(1.2); opacity: 1;   }
+}
+
+@keyframes ring-spin {
+  to { transform: rotate(360deg); }
+}
+
 // ─── Tasking banner ───────────────────────────────────────────────────────────
 
 .chat-tasking-banner {
@@ -418,6 +526,34 @@
     font-size: 0.8125rem;
     color: $text-secondary;
     line-height: 1.5;
+  }
+
+  // Success state — spinner replaced by a check icon
+  &--done {
+    background: rgba(#22c55e, 0.07);
+    border-top-color: rgba(#22c55e, 0.4);
+
+    .material-icons {
+      font-size: 28px;
+      color: #4ade80;
+      flex-shrink: 0;
+    }
+
+    .chat-tasking-banner__title { color: #4ade80; }
+  }
+
+  // Warning state — Jira connected but push failed
+  &--warn {
+    background: rgba(#f59e0b, 0.07);
+    border-top-color: rgba(#f59e0b, 0.4);
+
+    .material-icons {
+      font-size: 28px;
+      color: #fbbf24;
+      flex-shrink: 0;
+    }
+
+    .chat-tasking-banner__title { color: #fbbf24; }
   }
 }
 

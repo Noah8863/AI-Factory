@@ -68,12 +68,22 @@ function TypingIndicator() {
   )
 }
 
+const TASKING_PHRASES = [
+  'Analyzing Requirements',
+  'Defining Scope',
+  'Structuring Backlog',
+  'Creating Tickets',
+  'Assigning Tasks',
+]
+
 export default function ChatThread({
   messages,
   status,
   isSending,
   sendError,
   showReadyBanner,
+  taskingResult,
+  isTaskingLoading,
   onSendMessage,
   onContinueChat,
   onStartTasking,
@@ -83,6 +93,27 @@ export default function ChatThread({
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const isTasking = status === 'tasking'
+
+  // Cycling phrase state for the loading overlay
+  const [phraseIndex, setPhraseIndex] = useState(0)
+  const [phraseVisible, setPhraseVisible] = useState(true)
+
+  useEffect(() => {
+    if (!isTaskingLoading) return
+    setPhraseIndex(0)
+    setPhraseVisible(true)
+
+    const cycle = setInterval(() => {
+      // Fade out
+      setPhraseVisible(false)
+      setTimeout(() => {
+        setPhraseIndex(i => (i + 1) % TASKING_PHRASES.length)
+        setPhraseVisible(true)
+      }, 300) // wait for fade-out then swap text and fade in
+    }, 1400) // total time per phrase (1.4s gives 1.1s visible + 0.3s fade)
+
+    return () => clearInterval(cycle)
+  }, [isTaskingLoading])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -105,6 +136,27 @@ export default function ChatThread({
 
   return (
     <div className="chat-thread">
+
+      {/* ── Tasking loading overlay ────────────────────────────── */}
+      {isTaskingLoading && (
+        <div className="tasking-overlay">
+          <div className="tasking-overlay__orb" />
+          <div className="tasking-overlay__ring tasking-overlay__ring--1" />
+          <div className="tasking-overlay__ring tasking-overlay__ring--2" />
+          <div className="tasking-overlay__ring tasking-overlay__ring--3" />
+          <div className="tasking-overlay__icon">
+            <span className="material-icons">smart_toy</span>
+          </div>
+          <p
+            className="tasking-overlay__phrase"
+            style={{ opacity: phraseVisible ? 1 : 0 }}
+          >
+            {TASKING_PHRASES[phraseIndex]}
+          </p>
+          <p className="tasking-overlay__sub">PM Agent is working…</p>
+        </div>
+      )}
+
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="chat-thread__header">
         <button className="chat-thread__back" onClick={onBack}>
@@ -186,7 +238,7 @@ export default function ChatThread({
       )}
 
       {/* ── Tasking in progress ────────────────────────────────── */}
-      {isTasking && (
+      {isTasking && !taskingResult && (
         <div className="chat-tasking-banner">
           <div className="chat-tasking-banner__spinner" />
           <div>
@@ -194,6 +246,37 @@ export default function ChatThread({
             <p className="chat-tasking-banner__sub">
               The PM agent is breaking your idea into development tasks.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tasking complete ───────────────────────────────────── */}
+      {isTasking && taskingResult && (
+        <div className={`chat-tasking-banner chat-tasking-banner--done ${taskingResult.jira_error ? 'chat-tasking-banner--warn' : ''}`}>
+          <span className="material-icons">
+            {taskingResult.jira_error ? 'warning' : 'check_circle'}
+          </span>
+          <div>
+            {taskingResult.jira_error ? (
+              <>
+                <p className="chat-tasking-banner__title">Tickets generated — Jira sync failed</p>
+                <p className="chat-tasking-banner__sub">{taskingResult.jira_error}</p>
+              </>
+            ) : taskingResult.jira_tickets_created?.length > 0 ? (
+              <>
+                <p className="chat-tasking-banner__title">
+                  {taskingResult.jira_tickets_created.length} ticket{taskingResult.jira_tickets_created.length !== 1 ? 's' : ''} created in Jira
+                </p>
+                <p className="chat-tasking-banner__sub">
+                  {taskingResult.jira_tickets_created.map(t => t.key).join(' · ')}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="chat-tasking-banner__title">Tasks generated</p>
+                <p className="chat-tasking-banner__sub">Connect Jira on your profile to push tickets automatically.</p>
+              </>
+            )}
           </div>
         </div>
       )}

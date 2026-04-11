@@ -53,6 +53,8 @@ export default function Dashboard() {
   const [isSending, setIsSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const [showReadyBanner, setShowReadyBanner] = useState(false)
+  const [taskingResult, setTaskingResult] = useState(null)   // { jira_tickets_created, jira_error }
+  const [isTaskingLoading, setIsTaskingLoading] = useState(false)
 
   // ── History state ────────────────────────────────────────────
   const [ideas, setIdeas] = useState([])
@@ -192,16 +194,23 @@ export default function Dashboard() {
   const handleStartTasking = async () => {
     if (!conversation) return
     setShowReadyBanner(false)
+    setTaskingResult(null)
+    setIsTaskingLoading(true)
     try {
       const res = await startTasking(conversation.id)
-      setConversation(res.data)
+      const { conversation: conv, messages: msgs, jira_tickets_created, jira_error } = res.data
+      setConversation(conv)
+      setMessages(msgs)
+      setTaskingResult({ jira_tickets_created, jira_error })
     } catch {
       setSendError('Failed to start tasking. Please try again.')
+    } finally {
+      setIsTaskingLoading(false)
     }
   }
 
   const handleContinueChat = () => setShowReadyBanner(false)
-  const handleBackFromChat  = () => setActiveNav('new')
+  const handleBackFromChat  = () => { setActiveNav('new'); setTaskingResult(null) }
 
   const handleLogout = () => {
     localStorage.removeItem('aif_user')
@@ -445,6 +454,8 @@ export default function Dashboard() {
             isSending={isSending}
             sendError={sendError}
             showReadyBanner={showReadyBanner}
+            taskingResult={taskingResult}
+            isTaskingLoading={isTaskingLoading}
             onSendMessage={handleSendMessage}
             onContinueChat={handleContinueChat}
             onStartTasking={handleStartTasking}
