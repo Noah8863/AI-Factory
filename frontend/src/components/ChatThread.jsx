@@ -79,6 +79,8 @@ const TASKING_PHRASES = [
 export default function ChatThread({
   messages,
   status,
+  jiraStatus,
+  jiraRequiredMessage,
   isSending,
   sendError,
   showReadyBanner,
@@ -91,6 +93,7 @@ export default function ChatThread({
   onYesContinue,
   onNoClose,
   onAddMoreRequirements,
+  onGoToProfile,
   onBack,
 }) {
   const [input, setInput] = useState('')
@@ -98,6 +101,7 @@ export default function ChatThread({
   const inputRef = useRef(null)
   const isTasking = status === 'tasking'
   const isDone    = status === 'done'
+  const isJiraBlocked = jiraStatus !== 'connected'
 
   // Cycling phrase state for the loading overlay
   const [phraseIndex, setPhraseIndex] = useState(0)
@@ -126,7 +130,7 @@ export default function ChatThread({
 
   const handleSend = () => {
     const trimmed = input.trim()
-    if (!trimmed || isSending || isTasking || isDone) return
+    if (!trimmed || isSending || isTasking || isDone || isJiraBlocked) return
     setInput('')
     onSendMessage(trimmed)
     inputRef.current?.focus()
@@ -194,6 +198,23 @@ export default function ChatThread({
           <span>Conversation started</span>
         </div>
 
+        {isJiraBlocked && (
+          <div className="chat-thread__jira-lockout" role="alert">
+            <div className="chat-thread__jira-lockout-icon">
+              <span className="material-icons">link_off</span>
+            </div>
+            <div className="chat-thread__jira-lockout-body">
+              <p className="chat-thread__jira-lockout-title">{jiraRequiredMessage}</p>
+              <p className="chat-thread__jira-lockout-text">
+                Connect Jira from your profile to continue chatting with the PM agent.
+              </p>
+            </div>
+            <button className="chat-thread__jira-lockout-action" onClick={onGoToProfile}>
+              Connect Jira
+            </button>
+          </div>
+        )}
+
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
@@ -227,6 +248,7 @@ export default function ChatThread({
             <button
               className="chat-ready-banner__btn chat-ready-banner__btn--ghost"
               onClick={onContinueChat}
+              disabled={isJiraBlocked}
             >
               <span className="material-icons">chat</span>
               Continue Chat
@@ -234,6 +256,7 @@ export default function ChatThread({
             <button
               className="chat-ready-banner__btn chat-ready-banner__btn--primary"
               onClick={onStartTasking}
+              disabled={isJiraBlocked}
             >
               Start Building
               <span className="material-icons">rocket_launch</span>
@@ -299,17 +322,17 @@ export default function ChatThread({
           <textarea
             ref={inputRef}
             className="chat-thread__input"
-            placeholder="Reply to the PM agent…"
+            placeholder={isJiraBlocked ? 'Connect Jira to continue chatting' : 'Reply to the PM agent…'}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
-            disabled={isSending}
+            disabled={isSending || isJiraBlocked}
           />
           <button
             className="chat-thread__send"
             onClick={handleSend}
-            disabled={!input.trim() || isSending}
+            disabled={isJiraBlocked || !input.trim() || isSending}
             aria-label="Send message"
           >
             <span className="material-icons">send</span>

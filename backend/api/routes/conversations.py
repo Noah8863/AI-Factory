@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from db.database import get_db
 from models.conversation import Conversation
 from models.idea import Idea
+from models.jira_token import JiraToken
 from models.message import Message
 from schemas.conversation import (
     ConversationCreate,
@@ -40,6 +41,30 @@ TASKING_DECLINED_AGENT_MESSAGE = (
 _optional_bearer = HTTPBearer(auto_error=False)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
+
+JIRA_REQUIRED_MESSAGE = "Please connect your Jira account before making a project."
+
+
+def _get_owned_conversation(
+    conversation_id: int,
+    user_id: int,
+    db: Session,
+) -> Conversation:
+    conversation = (
+        db.query(Conversation)
+        .join(Idea, Conversation.idea_id == Idea.id)
+        .filter(Conversation.id == conversation_id, Idea.user_id == user_id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conversation
+
+
+def _ensure_jira_connected(user_id: int, db: Session) -> None:
+    connected = db.query(JiraToken).filter(JiraToken.user_id == user_id).first() is not None
+    if not connected:
+        raise HTTPException(status_code=403, detail=JIRA_REQUIRED_MESSAGE)
 
 
 def _build_detail(conversation: Conversation, db: Session) -> ConversationDetail:
@@ -79,6 +104,8 @@ def create_conversation(
     Creates an idea, a conversation, the user's opening message,
     and the PM agent's first clarifying response — all in one shot.
     """
+    _ensure_jira_connected(current_user.id, db)
+
     # 1. Persist the idea (associated with the logged-in user)
     idea = Idea(content=payload.content, user_id=current_user.id)
     db.add(idea)
@@ -122,15 +149,15 @@ def get_conversation(conversation_id: int, db: Session = Depends(get_db)):
 def send_message(
     conversation_id: int,
     payload: MessageCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
     Appends a user message, calls the PM agent with the full conversation
     history, and returns the updated thread.
     """
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    _ensure_jira_connected(current_user.id, db)
+    conversation = _get_owned_conversation(conversation_id, current_user.id, db)
     if conversation.status in ("tasking", "done"):
         raise HTTPException(status_code=400, detail="Conversation is not open for new messages.")
 
@@ -173,7 +200,7 @@ def send_message(
 @router.post("/{conversation_id}/start-tasking", response_model=TaskingResult)
 async def start_tasking(
     conversation_id: int,
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_bearer),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -188,23 +215,13 @@ async def start_tasking(
     5. Returns TaskingResult with the updated conversation, full message
        history, ticket payload, and Jira creation results.
     """
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    _ensure_jira_connected(current_user.id, db)
+    conversation = _get_owned_conversation(conversation_id, current_user.id, db)
 
     if conversation.status in ("tasking", "done"):
         raise HTTPException(status_code=400, detail="Conversation is not in a taskable state.")
 
-    # ── Resolve caller identity (optional auth) ───────────────────
-    # If an Authorization header is present and valid, we use that user_id
-    # to look up the Jira token.  If absent or invalid, Jira is skipped.
-    user_id: int | None = None
-    if credentials:
-        try:
-            payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
-            user_id = int(payload["sub"])
-        except (JWTError, KeyError, ValueError):
-            logger.debug("start_tasking: bearer token present but invalid — skipping Jira.")
+    user_id = current_user.id
 
     # ── Load all messages, then slice to post-checkpoint window ──
     # On a re-tasking run the user has already had one round of ticket generation.

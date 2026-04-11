@@ -259,6 +259,20 @@ export default function Profile() {
               Integrations
             </h2>
 
+            <div className={`profile-required-callout ${jiraStatus === 'connected' ? 'profile-required-callout--connected' : 'profile-required-callout--warning'}`}>
+              <span className="material-icons">
+                {jiraStatus === 'connected' ? 'verified' : 'error'}
+              </span>
+              <div>
+                <p className="profile-required-callout__title">Jira is required for PM projects</p>
+                <p className="profile-required-callout__text">
+                  {jiraStatus === 'connected'
+                    ? 'Your account is ready to create projects with the PM agent.'
+                    : 'You need to link Jira before you can create a project or keep chatting with the PM agent.'}
+                </p>
+              </div>
+            </div>
+
             <div className="integrations">
 
               {/* Jira */}
@@ -267,7 +281,7 @@ export default function Profile() {
                   <div className="intg-row__logo intg-row__logo--jira">J</div>
                   <div className="intg-row__info">
                     <p className="intg-row__name">Jira</p>
-                    <p className="intg-row__desc">Atlassian project management</p>
+                    <p className="intg-row__desc">Atlassian project management · required</p>
                   </div>
                   <div className="intg-row__right">
                     {jiraStatus === 'loading' ? (

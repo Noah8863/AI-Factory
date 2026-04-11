@@ -403,10 +403,89 @@
     color: #a5b4fc;
   }
 
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+    background: $bg-elevated;
+    border-color: $border-default;
+    color: $text-tertiary;
+  }
+
   // Tap-sized targets on mobile
   @media (max-width: 640px) {
     padding: 9px 14px;
     font-size: 0.875rem;
+  }
+}
+
+.jira-required-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+  background: rgba($amber, 0.08);
+  border: 1px solid rgba($amber, 0.26);
+  border-radius: $radius-lg;
+
+  @media (max-width: 640px) {
+    flex-wrap: wrap;
+  }
+
+  &__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba($amber, 0.14);
+    color: $amber;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+
+    .material-icons { font-size: 20px; }
+  }
+
+  &__body {
+    flex: 1;
+    min-width: 220px;
+  }
+
+  &__title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: $text-primary;
+    margin-bottom: 4px;
+  }
+
+  &__text {
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: $text-secondary;
+  }
+
+  &__action {
+    padding: 10px 16px;
+    background: $gradient-brand;
+    color: #fff;
+    border: none;
+    border-radius: $radius-full;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: $transition;
+    box-shadow: 0 0 18px rgba($indigo, 0.25);
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 0 28px rgba($indigo, 0.36);
+    }
+
+    @media (max-width: 640px) {
+      width: 100%;
+    }
   }
 }
 

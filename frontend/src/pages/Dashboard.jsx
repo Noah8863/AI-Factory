@@ -5,6 +5,8 @@ import ChatThread from '../components/ChatThread'
 import Navbar from '../components/Navbar'
 import './Dashboard.scss'
 
+const JIRA_REQUIRED_MESSAGE = 'Please connect your Jira account before making a project.'
+
 const TEMPLATES = [
   { label: 'Web App',       icon: 'language',     text: 'Build a web application that ' },
   { label: 'REST API',      icon: 'api',          text: 'Create a REST API that ' },
@@ -63,6 +65,7 @@ export default function Dashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState(null)   // idea pending deletion
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [jiraStatus, setJiraStatus] = useState('loading')
 
   // ── Auth guard ───────────────────────────────────────────────
   useEffect(() => { if (!user) navigate('/login') }, [])
@@ -81,6 +84,26 @@ export default function Dashboard() {
 
   useEffect(() => { fetchIdeas() }, [fetchIdeas])
 
+  useEffect(() => {
+    let cancelled = false
+
+    api.get('/auth/jira/status')
+      .then((res) => {
+        if (!cancelled) {
+          setJiraStatus(res.data.connected ? 'connected' : 'disconnected')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setJiraStatus('disconnected')
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // ── Auto-save draft ──────────────────────────────────────────
   useEffect(() => {
     clearTimeout(saveTimer.current)
@@ -98,6 +121,10 @@ export default function Dashboard() {
   // ── Submit idea → open conversation ──────────────────────────
   const handleSubmit = async () => {
     if (!text.trim()) return
+    if (jiraStatus !== 'connected') {
+      setInputError(JIRA_REQUIRED_MESSAGE)
+      return
+    }
     setSubmitting(true)
     setInputError('')
     try {
@@ -167,6 +194,10 @@ export default function Dashboard() {
   // ── Send message in active conversation ──────────────────────
   const handleSendMessage = async (content) => {
     if (!conversation) return
+    if (jiraStatus !== 'connected') {
+      setSendError(JIRA_REQUIRED_MESSAGE)
+      return
+    }
     setSendError('')
 
     const optimisticMsg = {
@@ -197,6 +228,10 @@ export default function Dashboard() {
   // ── Start tasking ────────────────────────────────────────────
   const handleStartTasking = async () => {
     if (!conversation) return
+    if (jiraStatus !== 'connected') {
+      setSendError(JIRA_REQUIRED_MESSAGE)
+      return
+    }
     setShowReadyBanner(false)
     setTaskingResult(null)
     setIsTaskingLoading(true)
@@ -423,6 +458,24 @@ export default function Dashboard() {
               </p>
             </div>
 
+            {jiraStatus !== 'connected' && (
+              <div className="jira-required-banner">
+                <div className="jira-required-banner__icon">
+                  <span className="material-icons">link_off</span>
+                </div>
+                <div className="jira-required-banner__body">
+                  <p className="jira-required-banner__title">Jira connection required</p>
+                  <p className="jira-required-banner__text">{JIRA_REQUIRED_MESSAGE}</p>
+                </div>
+                <button
+                  className="jira-required-banner__action"
+                  onClick={() => navigate('/profile')}
+                >
+                  Connect Jira
+                </button>
+              </div>
+            )}
+
             <div className="templates">
               <p className="templates__label">
                 <span className="material-icons">bolt</span>
@@ -430,7 +483,12 @@ export default function Dashboard() {
               </p>
               <div className="templates__chips">
                 {TEMPLATES.map((t) => (
-                  <button key={t.label} className="template-chip" onClick={() => handleTemplate(t)}>
+                  <button
+                    key={t.label}
+                    className="template-chip"
+                    onClick={() => handleTemplate(t)}
+                    disabled={jiraStatus !== 'connected'}
+                  >
                     <span className="material-icons">{t.icon}</span>
                     {t.label}
                   </button>
@@ -447,6 +505,7 @@ export default function Dashboard() {
                 onChange={(e) => setText(e.target.value)}
                 maxLength={MAX_CHARS}
                 spellCheck
+                disabled={jiraStatus !== 'connected'}
               />
               <div className="idea-input__footer">
                 <div className="idea-input__meta">
@@ -463,7 +522,7 @@ export default function Dashboard() {
                 <button
                   className="idea-input__submit"
                   onClick={handleSubmit}
-                  disabled={!text.trim() || submitting || charCount > MAX_CHARS}
+                  disabled={jiraStatus !== 'connected' || !text.trim() || submitting || charCount > MAX_CHARS}
                 >
                   {submitting ? (
                     <><span className="idea-input__spinner" />Starting…</>
@@ -507,12 +566,15 @@ export default function Dashboard() {
             taskingResult={taskingResult}
             isTaskingLoading={isTaskingLoading}
             repoUrl={conversation.github_repo_url ?? null}
+            jiraStatus={jiraStatus}
+            jiraRequiredMessage={JIRA_REQUIRED_MESSAGE}
             onSendMessage={handleSendMessage}
             onContinueChat={handleContinueChat}
             onStartTasking={handleStartTasking}
             onYesContinue={handleYesContinue}
             onNoClose={handleNoClose}
             onAddMoreRequirements={handleAddMoreRequirements}
+            onGoToProfile={() => navigate('/profile')}
             onBack={handleBackFromChat}
           />
         )}
