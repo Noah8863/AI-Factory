@@ -49,6 +49,7 @@ output ONLY a JSON block in this exact format — no prose before or after it:
   "projectName": "string",
   "projectSummary": "string (2–3 sentence overview)",
   "githubRepoName": "string (lowercase-kebab-case)",
+  "jiraProjectKey": "string (UPPERCASE, max 10 characters, letters and numbers only — e.g. MYAPP, SHOPFE)",
   "tickets": [
     {
       "id": "string (e.g. BE-1, FE-1)",
@@ -68,9 +69,11 @@ Rules for ticket generation:
 - Each ticket should be completable in 1–2 days
 - Write descriptions with clear acceptance criteria ("Given X, when Y, then Z")
 - Aim for 4–10 tickets total depending on project scope
-- Always include at least one "project setup" backend ticket and one 
+- Always include at least one "project setup" backend ticket and one
   "UI scaffolding" frontend ticket
 - githubRepoName should be a clean kebab-case slug of the project name
+- jiraProjectKey should be a short UPPERCASE abbreviation of the project name
+  (max 10 characters, letters and numbers only, must start with a letter)
 
 ## Phase 3 — Continuation after a tasking round
 If the conversation history already contains an "ACTION: Start tasking..." trigger

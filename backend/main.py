@@ -36,6 +36,12 @@ with engine.connect() as _conn:
     _conn.execute(text(
         "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS github_repo_url VARCHAR(512)"
     ))
+    _conn.execute(text(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS jira_project_key VARCHAR(32)"
+    ))
+    _conn.execute(text(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS jira_project_url VARCHAR(512)"
+    ))
     _conn.commit()
 logger.info("Column migrations applied")
 

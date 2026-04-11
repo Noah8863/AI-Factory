@@ -14,5 +14,8 @@ class Conversation(Base):
     # GitHub repo created when the user first clicks "Start Building"
     github_repo_name = Column(String(255), nullable=True)
     github_repo_url  = Column(String(512), nullable=True)
+    # Jira project auto-created on first "Start Building"
+    jira_project_key = Column(String(32),  nullable=True)
+    jira_project_url = Column(String(512), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

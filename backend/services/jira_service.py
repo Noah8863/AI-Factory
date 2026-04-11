@@ -262,6 +262,90 @@ async def get_user_jira_projects(user_id: int, db: Session) -> dict:
     }
 
 
+# ── Project creation ─────────────────────────────────────────────────────────
+
+async def create_jira_project(
+    user_id:      int,
+    db:           Session,
+    project_key:  str,
+    project_name: str,
+) -> dict:
+    """
+    Creates a new Jira Software project on the user's first accessible cloud
+    instance.  The project key must be UPPERCASE letters/numbers, max 10 chars.
+
+    Returns:
+        {"cloud_id": str, "project_key": str, "project_url": str}
+
+    Raises JiraServiceError on failure.
+    """
+    access_token = await get_valid_access_token(user_id, db)
+    if access_token is None:
+        raise JiraServiceError("User has no connected Jira account.")
+
+    resources = await _get_accessible_resources(access_token)
+    cloud_id  = resources[0]["id"]
+    cloud_url = resources[0].get("url", "")
+
+    # Jira requires the project lead's accountId.
+    myself_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/myself"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get(
+                myself_url,
+                headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+            )
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise JiraServiceError(
+                "Failed to fetch Jira user info (%s): %s"
+                % (exc.response.status_code, exc.response.text)
+            ) from exc
+    account_id = resp.json().get("accountId", "")
+
+    create_url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/project"
+    payload = {
+        "key":                 project_key,
+        "name":                project_name,
+        "projectTypeKey":      "software",
+        "projectTemplateKey":  "com.pyxis.greenhopper.jira:gh-simplified-scrum-agility",
+        "description":         f"Auto-created by AI Factory for: {project_name}",
+        "leadAccountId":       account_id,
+    }
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        try:
+            resp = await client.post(
+                create_url,
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept":        "application/json",
+                    "Content-Type":  "application/json",
+                },
+            )
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise JiraServiceError(
+                "Failed to create Jira project '%s' (%s): %s"
+                % (project_key, exc.response.status_code, exc.response.text)
+            ) from exc
+
+    created = resp.json()
+    actual_key   = created.get("key", project_key)
+    project_url  = f"{cloud_url}/jira/software/projects/{actual_key}/boards"
+
+    logger.info(
+        "Jira project '%s' (%s) created on cloud %s for user %s.",
+        project_name, actual_key, cloud_id, user_id,
+    )
+    return {
+        "cloud_id":    cloud_id,
+        "project_key": actual_key,
+        "project_url": project_url,
+    }
+
+
 # ── Ticket creation ───────────────────────────────────────────────────────────
 
 def _build_adf_description(text: str) -> dict:
@@ -400,19 +484,20 @@ async def _get_project_issue_type(access_token: str, cloud_id: str, project_key:
 # ── Main public entry point ───────────────────────────────────────────────────
 
 async def push_tickets_to_jira(
-    user_id: int,
-    db:      Session,
-    tickets: list[dict],
+    user_id:     int,
+    db:          Session,
+    tickets:     list[dict],
+    project_key: str,
+    cloud_id:    str | None = None,
 ) -> list[dict]:
     """
-    High-level entry point called by the PM agent service.
+    High-level entry point for creating Jira issues.
 
-    1. Loads and (if necessary) refreshes the user's Jira token.
-    2. Resolves the user's first accessible Jira Cloud instance.
-    3. Resolves the first available project on that instance.
-    4. Creates one Jira issue per ticket dict.
-    5. Returns a list of result dicts (id, key, url — or error info on failure).
+    project_key must be supplied by the caller (the auto-created project key
+    stored on the Conversation).  cloud_id is optional — if omitted it is
+    resolved from the user's accessible resources.
 
+    Returns a list of result dicts (id, key, url — or error info on failure).
     If the user has no Jira token this returns [] silently (not an error).
     """
     # ── Step 1: token ─────────────────────────────────────────────
@@ -421,24 +506,23 @@ async def push_tickets_to_jira(
         logger.info("User %s has no Jira token — skipping ticket creation.", user_id)
         return []
 
-    # ── Step 2: cloud instance + project ─────────────────────────
-    # Prefer the user's explicitly chosen project; fall back to first available.
-    token_row = db.query(JiraToken).filter(JiraToken.user_id == user_id).first()
+    # ── Step 2: cloud instance ────────────────────────────────────
+    if not cloud_id:
+        token_row = db.query(JiraToken).filter(JiraToken.user_id == user_id).first()
+        if token_row and token_row.jira_cloud_id:
+            cloud_id = token_row.jira_cloud_id
+        else:
+            resources = await _get_accessible_resources(access_token)
+            cloud_id  = resources[0]["id"]
+            logger.info(
+                "Resolved Jira cloud '%s' for user %s.",
+                resources[0].get("name", cloud_id), user_id,
+            )
 
-    if token_row and token_row.jira_cloud_id and token_row.jira_project_key:
-        cloud_id    = token_row.jira_cloud_id
-        project_key = token_row.jira_project_key
-        logger.info(
-            "Using stored Jira config (cloud: %s, project: %s) for user %s.",
-            cloud_id, project_key, user_id,
-        )
-    else:
-        resources   = await _get_accessible_resources(access_token)
-        cloud_id    = resources[0]["id"]
-        cloud_name  = resources[0].get("name", cloud_id)
-        logger.info("Using Jira cloud '%s' (%s) for user %s.", cloud_name, cloud_id, user_id)
-        project_key = await _get_first_project_key(access_token, cloud_id)
-        logger.info("Using Jira project '%s' for ticket creation.", project_key)
+    logger.info(
+        "Pushing %d ticket(s) to Jira project '%s' (cloud: %s) for user %s.",
+        len(tickets), project_key, cloud_id, user_id,
+    )
 
     # ── Step 3: resolve issue type for this project ──────────────
     issue_type = await _get_project_issue_type(access_token, cloud_id, project_key)

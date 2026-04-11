@@ -13,6 +13,8 @@ class ConversationRead(BaseModel):
     status: str
     github_repo_name: str | None = None
     github_repo_url:  str | None = None
+    jira_project_key: str | None = None
+    jira_project_url: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

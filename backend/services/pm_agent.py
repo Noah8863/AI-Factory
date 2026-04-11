@@ -12,10 +12,8 @@ import os
 
 from dotenv import load_dotenv
 import anthropic
-from sqlalchemy.orm import Session
 
 from agents.pm_agent import PM_SYSTEM_PROMPT, parse_agent_reply
-from services.jira_service import push_tickets_to_jira, JiraServiceError
 
 load_dotenv()
 
@@ -78,87 +76,32 @@ def get_pm_response(
 
 
 async def run_tasking(
-    history:  list[dict],
-    user_id:  int | None,
-    db:       Session | None,
+    history: list[dict],
 ) -> dict:
     """
-    Orchestrates the full "Start Tasking" flow:
+    Calls the LLM with the "Start Tasking" trigger and returns the parsed result.
 
-    1. Appends the standard action message to the conversation history.
-    2. Calls the LLM and parses the resulting ticket JSON.
-    3. If user_id and db are provided (i.e. the user is authenticated) and
-       the user has a connected Jira account, pushes every ticket to Jira.
-    4. Returns a result dict:
-       {
-         "agent_reply":          str,         # raw text to store as agent message
-         "tickets":              dict | None, # parsed ticket payload from LLM
-         "jira_tickets_created": list[dict],  # [] when Jira not connected
-         "jira_error":           str | None,  # human-readable error if Jira push failed
-       }
+    Returns:
+        {
+          "agent_reply": str,         # raw display text (not stored in DB directly)
+          "tickets":     dict | None, # full parsed ticket payload from the LLM
+        }
+
+    GitHub repo creation, Jira project creation, and Jira ticket pushing are
+    handled by the caller (the conversations route) so the order can be
+    enforced: create project → push tickets.
     """
-    # ── 1. Build history including the trigger message ────────────
     tasking_history = history + [{"role": "user", "content": TASKING_ACTION_MESSAGE}]
-
-    # ── 2. Call LLM — use a high token limit so the full JSON is never truncated
     raw    = _call_llm(tasking_history, max_tokens=4096)
     parsed = parse_agent_reply(raw)
 
-    agent_reply = parsed["displayText"]
-    tickets     = parsed.get("tickets")  # dict with "tickets" list, or None
-
-    if tickets is None:
+    if parsed.get("tickets") is None:
         logger.warning(
             "run_tasking: LLM response did not contain parseable ticket JSON. "
             "Raw output (first 500 chars): %s", raw[:500]
         )
 
-    # ── 3. Push to Jira if possible ───────────────────────────────
-    jira_results: list[dict] = []
-    jira_error:   str | None = None
-
-    if tickets and user_id is not None and db is not None:
-        ticket_list = tickets.get("tickets", [])
-        if ticket_list:
-            try:
-                raw_results = await push_tickets_to_jira(
-                    user_id=user_id,
-                    db=db,
-                    tickets=ticket_list,
-                )
-                # Separate successfully created tickets from per-ticket API errors
-                jira_results = [r for r in raw_results if "key" in r]
-                failed       = [r for r in raw_results if "error" in r]
-
-                if jira_results:
-                    logger.info(
-                        "%d Jira ticket(s) created for user %s.",
-                        len(jira_results),
-                        user_id,
-                    )
-                if failed:
-                    titles = ", ".join(f["title"] for f in failed)
-                    first_err = failed[0].get("error", "unknown error")
-                    jira_error = (
-                        f"{len(failed)} ticket(s) failed to create ({titles}). "
-                        f"Jira API error: {first_err}"
-                    )
-                    logger.warning(
-                        "Jira ticket creation partial failure for user %s: %s",
-                        user_id,
-                        jira_error,
-                    )
-            except JiraServiceError as exc:
-                jira_error = str(exc)
-                logger.warning(
-                    "Jira ticket creation failed for user %s: %s",
-                    user_id,
-                    exc,
-                )
-
     return {
-        "agent_reply":          agent_reply,
-        "tickets":              tickets,
-        "jira_tickets_created": jira_results,
-        "jira_error":           jira_error,
+        "agent_reply": parsed["displayText"],
+        "tickets":     parsed.get("tickets"),
     }

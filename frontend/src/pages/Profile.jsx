@@ -29,49 +29,11 @@ export default function Profile() {
   // Integration statuses
   const [jiraStatus, setJiraStatus] = useState('loading')  // 'loading' | 'connected' | 'disconnected'
 
-  // Jira project selection
-  const [jiraProjects, setJiraProjects] = useState([])         // [{ key, name, id }]
-  const [jiraCloudId, setJiraCloudId] = useState('')
-  const [selectedProject, setSelectedProject] = useState('')   // project key
-  const [projectSaving, setProjectSaving] = useState(false)
-  const [projectSaveMsg, setProjectSaveMsg] = useState('')     // '' | 'saved' | error string
-  const [loadingProjects, setLoadingProjects] = useState(false)
-
   useEffect(() => {
     api.get('/auth/jira/status')
       .then(res => setJiraStatus(res.data.connected ? 'connected' : 'disconnected'))
       .catch(() => setJiraStatus('disconnected'))
   }, [])
-
-  // Fetch Jira projects once we know the user is connected
-  useEffect(() => {
-    if (jiraStatus !== 'connected') return
-    setLoadingProjects(true)
-    api.get('/auth/jira/projects')
-      .then(res => {
-        setJiraProjects(res.data.projects || [])
-        setJiraCloudId(res.data.cloud_id || '')
-        setSelectedProject(res.data.selected_project_key || '')
-      })
-      .catch(() => {/* non-fatal */})
-      .finally(() => setLoadingProjects(false))
-  }, [jiraStatus])
-
-  const handleProjectSelect = async (key) => {
-    if (!key || !jiraCloudId) return
-    setSelectedProject(key)
-    setProjectSaving(true)
-    setProjectSaveMsg('')
-    try {
-      await api.patch('/auth/jira/project', { project_key: key, cloud_id: jiraCloudId })
-      setProjectSaveMsg('saved')
-      setTimeout(() => setProjectSaveMsg(''), 3000)
-    } catch {
-      setProjectSaveMsg('Failed to save — please try again.')
-    } finally {
-      setProjectSaving(false)
-    }
-  }
 
   const loadAvatar = (file) => {
     if (!file || !file.type.startsWith('image/')) return
@@ -314,56 +276,6 @@ export default function Profile() {
                   </div>
                 </div>
 
-                {/* Project selector — shown only when connected */}
-                {jiraStatus === 'connected' && (
-                  <div className="intg-project">
-                    <label className="intg-project__label">
-                      <span className="material-icons">folder</span>
-                      Jira Project
-                    </label>
-                    {loadingProjects ? (
-                      <span className="intg-project__loading">
-                        <span className="intg-badge__spinner" />
-                        Loading projects…
-                      </span>
-                    ) : jiraProjects.length === 0 ? (
-                      <p className="intg-project__empty">
-                        No projects found. Create a project in your Jira workspace first.
-                      </p>
-                    ) : (
-                      <div className="intg-project__row">
-                        <select
-                          className="intg-project__select"
-                          value={selectedProject}
-                          onChange={(e) => handleProjectSelect(e.target.value)}
-                          disabled={projectSaving}
-                        >
-                          <option value="">— Select a project —</option>
-                          {jiraProjects.map(p => (
-                            <option key={p.key} value={p.key}>
-                              {p.name} ({p.key})
-                            </option>
-                          ))}
-                        </select>
-                        {projectSaving && <span className="intg-project__spinner" />}
-                        {projectSaveMsg === 'saved' && (
-                          <span className="intg-project__ok">
-                            <span className="material-icons">check_circle</span>
-                            Saved
-                          </span>
-                        )}
-                        {projectSaveMsg && projectSaveMsg !== 'saved' && (
-                          <span className="intg-project__err">{projectSaveMsg}</span>
-                        )}
-                      </div>
-                    )}
-                    {selectedProject && (
-                      <p className="intg-project__hint">
-                        Tickets from the PM agent will be created in <strong>{selectedProject}</strong>.
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
 
             </div>

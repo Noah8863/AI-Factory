@@ -20,6 +20,7 @@ from schemas.conversation import (
 from schemas.message import MessageCreate, MessageRead
 from services import pm_agent
 from services.github_service import create_org_repo
+from services.jira_service import create_jira_project, push_tickets_to_jira, JiraServiceError
 from models.user import User
 from services.auth_service import SECRET_KEY, ALGORITHM, get_current_user
 
@@ -249,18 +250,14 @@ async def start_tasking(
 
     llm_history = _build_llm_history(checkpoint_messages)
 
-    # ── Call PM agent (generates tickets + optionally creates in Jira) ──
-    result = await pm_agent.run_tasking(
-        history=llm_history,
-        user_id=user_id,
-        db=db,
-    )
+    # ── Call PM agent — generates ticket JSON ────────────────────
+    result = await pm_agent.run_tasking(history=llm_history)
 
-    # ── Create GitHub repo on first tasking run ───────────────────
-    # Only create the repo once. On re-tasking the conversation already has
-    # github_repo_url set, so we skip creation to avoid duplicate repos.
+    tickets_data = result.get("tickets") or {}
+
+    # ── 1. Create GitHub repo (first tasking only) ───────────────
     if conversation.github_repo_url is None:
-        repo_name = (result.get("tickets") or {}).get("githubRepoName")
+        repo_name = tickets_data.get("githubRepoName")
         if repo_name:
             repo_result = create_org_repo(repo_name)
             if repo_result:
@@ -272,8 +269,7 @@ async def start_tasking(
                 )
             else:
                 logger.warning(
-                    "GitHub repo creation failed for conversation %s (repo_name=%r). "
-                    "Continuing without a repo.",
+                    "GitHub repo creation failed for conversation %s (repo_name=%r).",
                     conversation_id, repo_name,
                 )
         else:
@@ -281,6 +277,81 @@ async def start_tasking(
                 "start_tasking: PM agent did not return a githubRepoName for "
                 "conversation %s — skipping repo creation.",
                 conversation_id,
+            )
+
+    # ── 2. Create Jira project (first tasking only) ──────────────
+    jira_cloud_id:      str | None = None
+    jira_tickets_created: list[dict] = []
+    jira_error:           str | None = None
+
+    if conversation.jira_project_key is None:
+        raw_project_key = tickets_data.get("jiraProjectKey")
+        project_name    = tickets_data.get("projectName", "AI Factory Project")
+        if raw_project_key:
+            try:
+                proj_result = await create_jira_project(
+                    user_id=user_id,
+                    db=db,
+                    project_key=raw_project_key,
+                    project_name=project_name,
+                )
+                conversation.jira_project_key = proj_result["project_key"]
+                conversation.jira_project_url = proj_result["project_url"]
+                jira_cloud_id = proj_result["cloud_id"]
+                logger.info(
+                    "Jira project %r created for conversation %s: %s",
+                    proj_result["project_key"], conversation_id, proj_result["project_url"],
+                )
+            except JiraServiceError as exc:
+                jira_error = f"Jira project creation failed: {exc}"
+                logger.warning(
+                    "Jira project creation failed for conversation %s: %s",
+                    conversation_id, exc,
+                )
+        else:
+            logger.warning(
+                "start_tasking: PM agent did not return a jiraProjectKey for "
+                "conversation %s — skipping Jira project creation.",
+                conversation_id,
+            )
+
+    # ── 3. Push tickets to the Jira project ─────────────────────
+    effective_project_key = conversation.jira_project_key
+    ticket_list = tickets_data.get("tickets", [])
+
+    if ticket_list and effective_project_key and not jira_error:
+        try:
+            raw_results = await push_tickets_to_jira(
+                user_id=user_id,
+                db=db,
+                tickets=ticket_list,
+                project_key=effective_project_key,
+                cloud_id=jira_cloud_id,
+            )
+            jira_tickets_created = [r for r in raw_results if "key" in r]
+            failed               = [r for r in raw_results if "error" in r]
+
+            if jira_tickets_created:
+                logger.info(
+                    "%d Jira ticket(s) created for conversation %s.",
+                    len(jira_tickets_created), conversation_id,
+                )
+            if failed:
+                titles    = ", ".join(f.get("title", "?") for f in failed)
+                first_err = failed[0].get("error", "unknown error")
+                jira_error = (
+                    f"{len(failed)} ticket(s) failed to create ({titles}). "
+                    f"Jira error: {first_err}"
+                )
+                logger.warning(
+                    "Partial Jira failure for conversation %s: %s",
+                    conversation_id, jira_error,
+                )
+        except JiraServiceError as exc:
+            jira_error = str(exc)
+            logger.warning(
+                "Jira ticket push failed for conversation %s: %s",
+                conversation_id, exc,
             )
 
     # ── Persist the trigger message + friendly agent confirmation ───
@@ -312,18 +383,18 @@ async def start_tasking(
         .all()
     )
 
-    if result.get("jira_error"):
+    if jira_error:
         logger.warning(
-            "Jira push failed for conversation %s (user %s): %s",
-            conversation_id, user_id, result["jira_error"],
+            "Jira error for conversation %s (user %s): %s",
+            conversation_id, user_id, jira_error,
         )
 
     return TaskingResult(
         conversation=ConversationRead.model_validate(conversation),
         messages=[MessageRead.model_validate(m) for m in all_messages],
         tickets=result.get("tickets"),
-        jira_tickets_created=result.get("jira_tickets_created", []),
-        jira_error=result.get("jira_error"),
+        jira_tickets_created=jira_tickets_created,
+        jira_error=jira_error,
     )
 
 
