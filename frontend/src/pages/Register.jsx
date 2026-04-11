@@ -426,6 +426,9 @@ export default function Register() {
 
       console.log('✅ Registration successful:', res.data)
       const { access_token, user } = res.data
+      if (!access_token || !user) {
+        throw new Error(`Unexpected response shape: ${JSON.stringify(res.data)}`)
+      }
       localStorage.setItem('aif_token', access_token)
       localStorage.setItem('aif_user', JSON.stringify({
         id:           user.id,

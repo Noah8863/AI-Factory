@@ -1,8 +1,12 @@
 import axios from 'axios'
 
-const api = axios.create({
-  baseURL: '/api',
-})
+// In production (built static files), use VITE_API_BASE_URL if set.
+// In local dev, fall back to '/api' which is proxied by Vite to localhost:8001.
+const baseURL = import.meta.env.VITE_API_BASE_URL
+  ? `${import.meta.env.VITE_API_BASE_URL}/api`
+  : '/api'
+
+const api = axios.create({ baseURL })
 
 // Add Bearer token to all requests (except preflight OPTIONS)
 api.interceptors.request.use((config) => {
