@@ -14,6 +14,7 @@ from api.routes.conversations import router as conversations_router
 from api.routes.auth import router as auth_router
 from api.routes.users import router as users_router
 from api.routes.jira_auth import router as jira_auth_router
+from api.routes.dev import router as dev_router
 
 # Configure logging
 logging.basicConfig(
@@ -51,6 +52,7 @@ app.include_router(jira_auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
+app.include_router(dev_router, prefix="/api")
 
 
 @app.get("/")

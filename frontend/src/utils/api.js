@@ -59,4 +59,9 @@ export const sendMessage = (conversationId, content) =>
 export const startTasking = (conversationId) =>
   api.post(`/conversations/${conversationId}/start-tasking`)
 
+// ── Dev / testing ────────────────────────────────────────────────────────────
+/** [DEV] Directly create a GitHub repo in the org without going through the PM flow. */
+export const devCreateGithubRepo = (repoName) =>
+  api.post('/dev/create-github-repo', { repo_name: repoName })
+
 export default api

@@ -65,34 +65,44 @@ def commit_and_push(repo_name: str, branch_name: str, commit_message: str):
         print(f"❌ Push failed: {e}")
         return False
     
-def create_org_repo(repo_name: str):
+def create_org_repo(repo_name: str) -> dict | None:
+    """
+    Creates a private repo in the AI-Factory-Labs GitHub org.
+
+    Returns a dict on success:
+      { "url": str, "created": bool }   (created=False means it already existed)
+    Returns None on failure.
+    """
     token = os.getenv("GITHUB_TOKEN")
-    org_name = "AI-Factory-Labs" # Your Org Name
-    
+    org_name = "AI-Factory-Labs"
+
     url = f"https://api.github.com/orgs/{org_name}/repos"
-    
+
     headers = {
         "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json"
+        "Accept": "application/vnd.github.v3+json",
     }
-    
+
     data = {
         "name": repo_name,
-        "private": True, # Keep user projects private by default
-        "auto_init": True # This creates a README so the repo isn't empty
+        "private": True,   # keep user projects private by default
+        "auto_init": True, # creates a README so the repo isn't empty
     }
-    
+
     response = requests.post(url, json=data, headers=headers)
-    
+
     if response.status_code == 201:
-        print(f"✨ Created new repository: {org_name}/{repo_name}")
-        return True
+        repo_url = response.json().get("html_url", f"https://github.com/{org_name}/{repo_name}")
+        print(f"✨ Created new repository: {repo_url}")
+        return {"url": repo_url, "created": True}
     elif response.status_code == 422:
-        print(f"ℹ️ Repository {repo_name} already exists.")
-        return True
+        # Repo already exists — surface the URL anyway
+        repo_url = f"https://github.com/{org_name}/{repo_name}"
+        print(f"ℹ️ Repository already exists: {repo_url}")
+        return {"url": repo_url, "created": False}
     else:
         print(f"❌ Failed to create repo: {response.json()}")
-        return False
+        return None
     
 def deploy_agent_work(repo_name: str, branch_name: str, commit_message: str):
     # 1. Ensure the repo exists in the Org

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './ChatThread.scss'
 import ConnectionStatus from './ConnectionStatus'
+import { devCreateGithubRepo } from '../utils/api'
 
 function parseMarkdownBold(text) {
   const parts = text.split(/\*\*(.*?)\*\*/g)
@@ -94,6 +95,25 @@ export default function ChatThread({
   const inputRef = useRef(null)
   const isTasking = status === 'tasking'
 
+  // ── [DEV] GitHub repo creation ────────────────────────────────────────────
+  const [repoState, setRepoState]   = useState('idle') // idle | loading | success | error
+  const [repoResult, setRepoResult] = useState(null)   // { repo_url, repo_name, already_existed }
+  const [repoError,  setRepoError]  = useState('')
+
+  const handleCreateRepo = async () => {
+    setRepoState('loading')
+    setRepoResult(null)
+    setRepoError('')
+    try {
+      const res = await devCreateGithubRepo('test-repo-001')
+      setRepoResult(res.data)
+      setRepoState('success')
+    } catch (err) {
+      setRepoError(err.response?.data?.detail || err.message || 'Unknown error')
+      setRepoState('error')
+    }
+  }
+
   // Cycling phrase state for the loading overlay
   const [phraseIndex, setPhraseIndex] = useState(0)
   const [phraseVisible, setPhraseVisible] = useState(true)
@@ -181,6 +201,41 @@ export default function ChatThread({
             {messages.length} messages
           </div>
         </div>
+      </div>
+
+      {/* ── [DEV] GitHub repo strip ────────────────────────────── */}
+      <div className="dev-strip">
+        <span className="dev-strip__badge">DEV</span>
+        <span className="dev-strip__label">Bypass PM flow →</span>
+        <button
+          className={`dev-strip__btn ${repoState === 'loading' ? 'dev-strip__btn--loading' : ''}`}
+          onClick={handleCreateRepo}
+          disabled={repoState === 'loading'}
+        >
+          {repoState === 'loading' ? (
+            <><span className="dev-strip__spinner" />Creating…</>
+          ) : (
+            <><span className="material-icons">add_circle_outline</span>Create GitHub Repo</>
+          )}
+        </button>
+
+        {repoState === 'success' && repoResult && (
+          <span className="dev-strip__result dev-strip__result--ok">
+            <span className="material-icons">check_circle</span>
+            {repoResult.already_existed ? 'Already exists:' : 'Created:'}
+            &nbsp;
+            <a href={repoResult.repo_url} target="_blank" rel="noreferrer">
+              {repoResult.repo_name}
+            </a>
+          </span>
+        )}
+
+        {repoState === 'error' && (
+          <span className="dev-strip__result dev-strip__result--err">
+            <span className="material-icons">error_outline</span>
+            {repoError}
+          </span>
+        )}
       </div>
 
       {/* ── Messages ───────────────────────────────────────────── */}
