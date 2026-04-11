@@ -31,6 +31,7 @@ export default function Navbar() {
               {!isDashboard && (
                 <Link to="/dashboard" className="navbar__link">Dashboard</Link>
               )}
+              <Link to="/profile" className="navbar__link">Profile</Link>
               <button onClick={handleLogout} className="navbar__logout">
                 <span className="material-icons">logout</span>
                 Logout
@@ -68,6 +69,10 @@ export default function Navbar() {
                   Dashboard
                 </Link>
               )}
+              <Link to="/profile" className="navbar__drawer-link" onClick={close}>
+                <span className="material-icons">person</span>
+                Profile
+              </Link>
               <button
                 className="navbar__drawer-link navbar__drawer-link--danger"
                 onClick={() => { handleLogout(); close() }}

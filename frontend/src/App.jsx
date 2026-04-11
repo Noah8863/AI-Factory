@@ -3,7 +3,9 @@ import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import Profile from './pages/Profile'
 import JiraCallback from './pages/JiraCallback'
+import { ThemeProvider } from './context/ThemeContext'
 
 function PrivateRoute({ children }) {
   const user = localStorage.getItem('aif_user')
@@ -12,6 +14,7 @@ function PrivateRoute({ children }) {
 
 export default function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
@@ -25,10 +28,19 @@ export default function App() {
             </PrivateRoute>
           }
         />
+        <Route
+          path="/profile"
+          element={
+            <PrivateRoute>
+              <Profile />
+            </PrivateRoute>
+          }
+        />
         {/* No auth guard — user arrives here from the Atlassian OAuth redirect */}
         <Route path="/jira/callback" element={<JiraCallback />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </ThemeProvider>
   )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../utils/api'
+import { useTheme } from '../context/ThemeContext'
 import './Register.scss'
 
 // ── Step metadata ─────────────────────────────────────────────────────────────
@@ -158,7 +159,11 @@ function Step1({ profile, errors, showPwd, showConf, setShowPwd, setShowConf, up
 
 // ── Step 2: Preferences ───────────────────────────────────────────────────────
 function Step2({ prefs, setPrefs }) {
-  const set = (key) => (val) => setPrefs(p => ({ ...p, [key]: val }))
+  const { setTheme } = useTheme()
+  const set = (key) => (val) => {
+    setPrefs(p => ({ ...p, [key]: val }))
+    if (key === 'theme') setTheme(val)
+  }
 
   const personalities = [
     { id: 'concise',  icon: 'bolt',       label: 'Concise',  desc: 'Short, punchy answers. Just the facts.' },

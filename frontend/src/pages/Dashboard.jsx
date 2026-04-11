@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea } from '../utils/api'
 import ChatThread from '../components/ChatThread'
+import Navbar from '../components/Navbar'
 import './Dashboard.scss'
 
 const TEMPLATES = [
@@ -34,6 +35,7 @@ function truncate(str, n = 160) {
 export default function Dashboard() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('aif_user') || 'null')
+  const avatar = localStorage.getItem('aif_avatar')
 
   // ── Nav & view state ────────────────────────────────────────
   const [activeNav, setActiveNav] = useState('new')
@@ -213,6 +215,19 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
 
+      {/* ── Animated background ───────────────────────────────── */}
+      <div className="dashboard__bg">
+        <div className="dashboard__orb dashboard__orb--1" />
+        <div className="dashboard__orb dashboard__orb--2" />
+        <div className="dashboard__orb dashboard__orb--3" />
+        <div className="dashboard__grid" />
+        {[...Array(9)].map((_, i) => (
+          <div key={i} className={`dashboard__particle dashboard__particle--${i + 1}`} />
+        ))}
+      </div>
+
+      <Navbar />
+
       {/* ── Confirmation modal ─────────────────────────────────── */}
       {deleteConfirm && (
         <div className="confirm-overlay" onClick={() => !deleting && setDeleteConfirm(null)}>
@@ -271,6 +286,10 @@ export default function Dashboard() {
           <span className="material-icons">history</span>
           Ideas
         </button>
+        <Link to="/profile" className="bottom-tabs__item">
+          <span className="material-icons">person</span>
+          Profile
+        </Link>
         <button className="bottom-tabs__item bottom-tabs__item--danger" onClick={handleLogout}>
           <span className="material-icons">logout</span>
           Logout
@@ -279,11 +298,6 @@ export default function Dashboard() {
 
       {/* ── Sidebar ────────────────────────────────────────────── */}
       <aside className="sidebar">
-        <Link to="/" className="sidebar__logo">
-          <span className="material-icons">auto_awesome</span>
-          AI Factory
-        </Link>
-
         <nav className="sidebar__nav">
           <button
             className={`sidebar__item ${activeNav === 'new' ? 'sidebar__item--active' : ''}`}
@@ -322,12 +336,15 @@ export default function Dashboard() {
         </nav>
 
         <div className="sidebar__footer">
-          <div className="sidebar__user">
+          <Link to="/profile" className="sidebar__user sidebar__user--link">
             <div className="sidebar__avatar">
-              {user?.username?.[0]?.toUpperCase() ?? 'U'}
+              {avatar
+                ? <img src={avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                : (user?.username?.[0]?.toUpperCase() ?? 'U')
+              }
             </div>
-            <span className="sidebar__username">{user?.username}</span>
-          </div>
+            <span className="sidebar__username">{user?.display_name || user?.username}</span>
+          </Link>
           <button className="sidebar__logout" onClick={handleLogout} title="Logout">
             <span className="material-icons">logout</span>
           </button>

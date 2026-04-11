@@ -3,17 +3,99 @@
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
 .dashboard {
+  position: relative;
   display: flex;
   min-height: 100vh;
   background: $bg-base;
   color: $text-primary;
+  overflow: hidden;
+
+  // ── Animated background ────────────────────────────────────────────────────
+
+  &__bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+
+  &__orb {
+    position: absolute;
+    border-radius: 50%;
+
+    &--1 {
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(circle, rgba($indigo, 0.18) 0%, transparent 65%);
+      top: -250px;
+      right: -150px;
+      animation: orb-drift 8s ease-in-out infinite;
+    }
+
+    &--2 {
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba($violet, 0.13) 0%, transparent 65%);
+      bottom: -150px;
+      left: -100px;
+      animation: orb-drift 10s ease-in-out infinite reverse;
+      animation-delay: -3s;
+    }
+
+    &--3 {
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba($sky, 0.08) 0%, transparent 65%);
+      top: 40%;
+      left: 20%;
+      animation: orb-drift 12s ease-in-out infinite;
+      animation-delay: -6s;
+    }
+  }
+
+  &__grid {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, var(--dot-grid-color) 1px, transparent 1px);
+    background-size: 36px 36px;
+    mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 20%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 20%, transparent 100%);
+  }
+
+  &__particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: $indigo;
+    opacity: 0;
+    animation: particle-float linear infinite;
+
+    &--1  { left: 12%;  animation-duration: 9s;  animation-delay: 0s;    bottom: -10px; }
+    &--2  { left: 24%;  animation-duration: 12s; animation-delay: -2s;   bottom: -10px; width: 3px; height: 3px; background: $violet; }
+    &--3  { left: 38%;  animation-duration: 7s;  animation-delay: -4s;   bottom: -10px; }
+    &--4  { left: 55%;  animation-duration: 11s; animation-delay: -1s;   bottom: -10px; width: 5px; height: 5px; background: $sky; }
+    &--5  { left: 68%;  animation-duration: 8s;  animation-delay: -3s;   bottom: -10px; }
+    &--6  { left: 78%;  animation-duration: 13s; animation-delay: -5s;   bottom: -10px; background: $violet; }
+    &--7  { left: 88%;  animation-duration: 10s; animation-delay: -7s;   bottom: -10px; width: 3px; height: 3px; }
+    &--8  { left: 6%;   animation-duration: 15s; animation-delay: -2.5s; bottom: -10px; background: $sky; }
+    &--9  { left: 46%;  animation-duration: 6s;  animation-delay: -8s;   bottom: -10px; width: 2px; height: 2px; }
+  }
+}
+
+@keyframes orb-drift {
+  0%, 100% { transform: translate(0, 0)       scale(1);    }
+  33%       { transform: translate(-20px, 15px) scale(1.04); }
+  66%       { transform: translate(15px, -10px) scale(0.97); }
+}
+
+@keyframes particle-float {
+  0%   { opacity: 0;   transform: translateY(0)     scale(0.6); }
+  10%  { opacity: 0.7; }
+  90%  { opacity: 0.4; }
+  100% { opacity: 0;   transform: translateY(-80vh) scale(1.2); }
 }
 
 // ─── Sidebar (desktop) ───────────────────────────────────────────────────────
 
 .sidebar {
   position: fixed;
-  top: 0;
+  top: 64px;
   left: 0;
   bottom: 0;
   width: 240px;
@@ -26,30 +108,6 @@
 
   // Hide entire sidebar on mobile — replaced by bottom tab bar
   @media (max-width: 640px) { display: none; }
-
-  &__logo {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 1rem;
-    font-weight: 700;
-    color: $text-primary;
-    text-decoration: none;
-    padding: 8px 12px;
-    margin-bottom: 28px;
-    border-radius: $radius-md;
-    transition: $transition;
-
-    .material-icons {
-      font-size: 20px;
-      background: $gradient-brand;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    &:hover { background: $bg-elevated; }
-  }
 
   &__nav {
     display: flex;
@@ -133,6 +191,16 @@
     gap: 10px;
     flex: 1;
     min-width: 0;
+
+    &--link {
+      text-decoration: none;
+      border-radius: $radius-md;
+      padding: 4px 6px;
+      margin: -4px -6px;
+      transition: $transition;
+
+      &:hover { background: $bg-hover; }
+    }
   }
 
   &__avatar {
@@ -194,7 +262,7 @@
     left: 0;
     right: 0;
     z-index: 50;
-    background: rgba($bg-surface, 0.96);
+    background: var(--bg-surface-glass);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border-top: 1px solid $border-subtle;
@@ -233,29 +301,30 @@
 // ─── Main content ─────────────────────────────────────────────────────────────
 
 .dashboard__main {
+  position: relative;
+  z-index: 1;
   margin-left: 240px;
   flex: 1;
-  padding: 40px 48px;
+  padding: 104px 48px 40px; // 64px navbar + 40px original top
   min-height: 100vh;
 
   @media (max-width: 900px) {
-    padding: 32px 28px;
+    padding: 96px 28px 32px;
   }
 
   @media (max-width: 640px) {
     margin-left: 0;
-    padding: 24px 16px 100px; // bottom padding to clear tab bar
+    padding: 88px 16px 100px; // 64px navbar + 24px + bottom tab bar
   }
 
   // Chat view fills the full height with no extra padding
   &--chat {
-    padding: 0;
+    padding: 64px 0 0; // only navbar offset, no side padding
     display: flex;
     flex-direction: column;
 
     @media (max-width: 640px) {
-      padding: 0;
-      padding-bottom: 60px; // tab bar
+      padding: 64px 0 60px;
     }
   }
 }

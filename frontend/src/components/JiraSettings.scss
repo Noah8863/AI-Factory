@@ -71,9 +71,9 @@
   }
 
   &--off {
-    background: rgba($text-tertiary, 0.08);
+    background: var(--text-tertiary-faint);
     color: $text-tertiary;
-    border: 1px solid rgba($text-tertiary, 0.15);
+    border: 1px solid var(--text-tertiary-faint-b);
 
     .js-status__dot { background: $text-tertiary; }
   }
@@ -307,7 +307,7 @@
   &__spinner {
     width: 12px;
     height: 12px;
-    border: 2px solid rgba($text-tertiary, 0.3);
+    border: 2px solid var(--text-tertiary-subtle);
     border-top-color: $text-tertiary;
     border-radius: 50%;
     animation: js-spin 0.7s linear infinite;

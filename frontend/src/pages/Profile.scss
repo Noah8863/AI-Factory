@@ -1,0 +1,643 @@
+@use '../styles/variables' as *;
+
+.profile-page {
+  position: relative;
+  min-height: 100vh;
+  background: $bg-base;
+  color: $text-primary;
+  overflow: hidden;
+
+  // ── Animated background ──────────────────────────────────────────────────────
+
+  &__bg { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+
+  &__orb {
+    position: absolute;
+    border-radius: 50%;
+
+    &--1 {
+      width: 700px;
+      height: 700px;
+      background: radial-gradient(circle, rgba($indigo, 0.18) 0%, transparent 65%);
+      top: -250px;
+      right: -150px;
+      animation: orb-drift 8s ease-in-out infinite;
+    }
+
+    &--2 {
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba($violet, 0.13) 0%, transparent 65%);
+      bottom: -150px;
+      left: -100px;
+      animation: orb-drift 10s ease-in-out infinite reverse;
+      animation-delay: -3s;
+    }
+
+    &--3 {
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, rgba($sky, 0.08) 0%, transparent 65%);
+      top: 40%;
+      left: 20%;
+      animation: orb-drift 12s ease-in-out infinite;
+      animation-delay: -6s;
+    }
+  }
+
+  &__grid {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(circle, var(--dot-grid-color) 1px, transparent 1px);
+    background-size: 36px 36px;
+    mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 20%, transparent 100%);
+    -webkit-mask-image: radial-gradient(ellipse 85% 85% at 50% 50%, black 20%, transparent 100%);
+  }
+
+  &__particle {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: $indigo;
+    opacity: 0;
+    animation: particle-float linear infinite;
+
+    &--1  { left: 12%;  animation-duration: 9s;  animation-delay: 0s;    bottom: -10px; }
+    &--2  { left: 24%;  animation-duration: 12s; animation-delay: -2s;   bottom: -10px; width: 3px; height: 3px; background: $violet; }
+    &--3  { left: 38%;  animation-duration: 7s;  animation-delay: -4s;   bottom: -10px; }
+    &--4  { left: 55%;  animation-duration: 11s; animation-delay: -1s;   bottom: -10px; width: 5px; height: 5px; background: $sky; }
+    &--5  { left: 68%;  animation-duration: 8s;  animation-delay: -3s;   bottom: -10px; }
+    &--6  { left: 78%;  animation-duration: 13s; animation-delay: -5s;   bottom: -10px; background: $violet; }
+    &--7  { left: 88%;  animation-duration: 10s; animation-delay: -7s;   bottom: -10px; width: 3px; height: 3px; }
+    &--8  { left: 6%;   animation-duration: 15s; animation-delay: -2.5s; bottom: -10px; background: $sky; }
+    &--9  { left: 46%;  animation-duration: 6s;  animation-delay: -8s;   bottom: -10px; width: 2px; height: 2px; }
+  }
+
+  &__body {
+    position: relative;
+    z-index: 1;
+    padding: 96px 24px 64px;
+    display: flex;
+    justify-content: center;
+  }
+
+  &__header {
+    margin-bottom: 32px;
+  }
+
+  &__back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: $text-secondary;
+    text-decoration: none;
+    margin-bottom: 20px;
+    transition: $transition;
+
+    .material-icons { font-size: 18px; }
+
+    &:hover { color: $text-primary; }
+  }
+
+  &__title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    background: $gradient-text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+  }
+
+  &__sub {
+    font-size: 0.9375rem;
+    color: $text-secondary;
+  }
+}
+
+.profile-wrap {
+  width: 100%;
+  max-width: 640px;
+}
+
+// ── Card ──────────────────────────────────────────────────────────────────────
+
+.profile-card {
+  background: $bg-surface;
+  border: 1px solid $border-default;
+  border-radius: $radius-xl;
+  padding: 28px 32px;
+  margin-bottom: 20px;
+
+  @media (max-width: 480px) {
+    padding: 20px 18px;
+  }
+
+  &__heading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: $text-secondary;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 24px;
+
+    .material-icons { font-size: 17px; }
+  }
+}
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
+
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+
+  @media (max-width: 480px) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.avatar-zone {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: $radius-full;
+  background: $bg-elevated;
+  border: 2px dashed $border-strong;
+  cursor: pointer;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: $transition;
+
+  &:hover, &:focus-visible {
+    border-color: $indigo;
+    outline: none;
+
+    .avatar-zone__overlay { opacity: 1; }
+  }
+
+  &--over {
+    border-color: $indigo;
+    background: rgba($indigo, 0.08);
+  }
+
+  &__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: $radius-full;
+  }
+
+  &__initial {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    background: $gradient-brand;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  &__overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: $radius-full;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    opacity: 0;
+    transition: $transition;
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 600;
+
+    .material-icons { font-size: 22px; }
+  }
+
+  &__file {
+    display: none;
+  }
+}
+
+.avatar-meta {
+  &__label {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: $text-primary;
+    margin-bottom: 4px;
+  }
+
+  &__hint {
+    font-size: 0.8125rem;
+    color: $text-tertiary;
+    margin-bottom: 12px;
+  }
+
+  &__remove {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: $rose;
+    background: rgba($rose, 0.08);
+    border: 1px solid rgba($rose, 0.2);
+    border-radius: $radius-md;
+    cursor: pointer;
+    font-family: inherit;
+    transition: $transition;
+
+    .material-icons { font-size: 15px; }
+
+    &:hover { background: rgba($rose, 0.14); }
+  }
+}
+
+// ── Profile form ──────────────────────────────────────────────────────────────
+
+.profile-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  &__field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: $text-secondary;
+  }
+
+  &__input {
+    width: 100%;
+    padding: 11px 14px;
+    background: $bg-elevated;
+    border: 1px solid $border-default;
+    border-radius: $radius-md;
+    color: $text-primary;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    transition: $transition;
+    box-sizing: border-box;
+
+    &::placeholder { color: $text-tertiary; }
+
+    &:focus {
+      outline: none;
+      border-color: $indigo;
+      box-shadow: 0 0 0 3px rgba($indigo, 0.12);
+    }
+  }
+
+  &__error {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 14px;
+    background: rgba($rose, 0.08);
+    border: 1px solid rgba($rose, 0.2);
+    border-radius: $radius-md;
+    color: $rose;
+    font-size: 0.875rem;
+
+    .material-icons { font-size: 17px; }
+  }
+
+  &__save {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    align-self: flex-start;
+    padding: 10px 22px;
+    background: $gradient-brand;
+    color: #fff;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    border: none;
+    border-radius: $radius-md;
+    cursor: pointer;
+    font-family: inherit;
+    transition: $transition;
+    box-shadow: 0 0 20px rgba($indigo, 0.25);
+
+    .material-icons { font-size: 17px; }
+
+    &:disabled { opacity: 0.6; cursor: default; }
+
+    &:not(:disabled):hover { box-shadow: 0 0 30px rgba($indigo, 0.4); }
+
+    &--success {
+      background: linear-gradient(135deg, $emerald 0%, darken($emerald, 10%) 100%);
+      box-shadow: 0 0 20px rgba($emerald, 0.25);
+    }
+  }
+
+  &__spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(#fff, 0.3);
+    border-top-color: #fff;
+    border-radius: $radius-full;
+    animation: spin 0.7s linear infinite;
+  }
+}
+
+// ── Integrations ──────────────────────────────────────────────────────────────
+
+.integrations {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.intg-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: $bg-elevated;
+  border: 1px solid $border-default;
+  border-radius: $radius-lg;
+  transition: $transition;
+
+  &--error {
+    border-color: rgba($rose, 0.3);
+    background: rgba($rose, 0.04);
+  }
+
+  @media (max-width: 520px) {
+    flex-wrap: wrap;
+  }
+
+  &__logo {
+    width: 40px;
+    height: 40px;
+    border-radius: $radius-md;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1.125rem;
+    flex-shrink: 0;
+
+    &--jira {
+      background: #0052cc;
+      color: #fff;
+    }
+
+    &--github {
+      background: $bg-base;
+      border: 1px solid $border-strong;
+      color: $text-secondary;
+
+      .material-icons { font-size: 20px; }
+    }
+  }
+
+  &__info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__name {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 2px;
+  }
+
+  &__desc {
+    font-size: 0.8125rem;
+    color: $text-tertiary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+
+    @media (max-width: 520px) {
+      width: 100%;
+      padding-left: 54px;
+    }
+  }
+}
+
+// ── Status badges ─────────────────────────────────────────────────────────────
+
+.intg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: $radius-full;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+
+  .material-icons { font-size: 14px; }
+
+  &--connected {
+    background: rgba($emerald, 0.12);
+    color: $emerald;
+    border: 1px solid rgba($emerald, 0.25);
+  }
+
+  &--disconnected {
+    background: rgba($rose, 0.1);
+    color: $rose;
+    border: 1px solid rgba($rose, 0.25);
+  }
+
+  &--loading {
+    background: $bg-hover;
+    color: $text-tertiary;
+    border: 1px solid $border-subtle;
+  }
+
+  &__spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid currentColor;
+    border-top-color: transparent;
+    border-radius: $radius-full;
+    animation: spin 0.7s linear infinite;
+  }
+}
+
+// ── Connect buttons ───────────────────────────────────────────────────────────
+
+.intg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: $radius-md;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: $transition;
+  white-space: nowrap;
+
+  .material-icons { font-size: 15px; }
+
+  &--primary {
+    background: $gradient-brand;
+    color: #fff;
+    box-shadow: 0 0 16px rgba($indigo, 0.25);
+
+    &:hover { box-shadow: 0 0 24px rgba($indigo, 0.4); }
+  }
+
+  &--secondary {
+    background: $bg-hover;
+    color: $text-secondary;
+    border: 1px solid $border-default;
+
+    &:hover {
+      color: $text-primary;
+      border-color: $border-strong;
+    }
+  }
+}
+
+// ── Theme picker ──────────────────────────────────────────────────────────────
+
+.theme-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.theme-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  border: 2px solid $border-default;
+  border-radius: $radius-lg;
+  background: $bg-elevated;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.22s $ease-out;
+  overflow: hidden;
+
+  &:hover {
+    border-color: $border-strong;
+    transform: translateY(-2px);
+  }
+
+  &--active {
+    border-color: $indigo;
+    background: rgba($indigo, 0.06);
+    box-shadow: 0 0 0 1px rgba($indigo, 0.15), 0 4px 20px rgba($indigo, 0.1);
+  }
+
+  &__preview {
+    width: 100%;
+    height: 72px;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px;
+
+    &--dark {
+      background: #0e0e1c;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+
+    &--light {
+      background: #f4f4ff;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+  }
+
+  &__bar {
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    width: 55%;
+  }
+
+  &__row {
+    height: 5px;
+    border-radius: 3px;
+
+    .theme-option__preview--dark & { background: rgba(255,255,255,0.12); }
+    .theme-option__preview--light & { background: rgba(0,0,0,0.10); }
+
+    &--short { width: 65%; }
+  }
+
+  &__label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: $text-secondary;
+    transition: $transition;
+  }
+
+  &--active &__label { color: $indigo; }
+
+  &__check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 16px !important;
+    color: $indigo;
+    animation: pop-in 0.3s $ease-out both;
+  }
+}
+
+@keyframes pop-in {
+  from { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.2); }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes orb-drift {
+  0%, 100% { transform: translate(0, 0)       scale(1);    }
+  33%       { transform: translate(-20px, 15px) scale(1.04); }
+  66%       { transform: translate(15px, -10px) scale(0.97); }
+}
+
+@keyframes particle-float {
+  0%   { opacity: 0;   transform: translateY(0)     scale(0.6); }
+  10%  { opacity: 0.7; }
+  90%  { opacity: 0.4; }
+  100% { opacity: 0;   transform: translateY(-80vh) scale(1.2); }
+}
