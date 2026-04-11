@@ -1,4 +1,5 @@
 @use '../styles/variables' as *;
+@use 'sass:color';
 
 .profile-page {
   position: relative;
@@ -346,7 +347,7 @@
     &:not(:disabled):hover { box-shadow: 0 0 30px rgba($indigo, 0.4); }
 
     &--success {
-      background: linear-gradient(135deg, $emerald 0%, darken($emerald, 10%) 100%);
+      background: linear-gradient(135deg, $emerald 0%, color.adjust($emerald, $lightness: -10%) 100%);
       box-shadow: 0 0 20px rgba($emerald, 0.25);
     }
   }

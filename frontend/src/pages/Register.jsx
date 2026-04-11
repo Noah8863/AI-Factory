@@ -289,7 +289,7 @@ function Step3({ errors, submitting, onBack, onCreate }) {
             className="integration-card__btn integration-card__btn--enabled"
             onClick={() => {
               const token = localStorage.getItem('aif_token')
-              const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+              const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
               window.location.href = `${base}/api/auth/jira/login${token ? `?token=${token}` : ''}`
             }}
           >
@@ -453,7 +453,7 @@ export default function Register() {
       } else if (err.response?.status === 500) {
         errorMsg = `Server error: ${err.response?.data?.detail || 'Unknown error'}`
       } else if (err.message === 'Network Error') {
-        errorMsg = 'Network error. Make sure the backend is running at http://localhost:8000'
+        errorMsg = 'Network error. Make sure the backend is running at http://localhost:8001'
       } else if (!err.response) {
         errorMsg = `Error: ${err.message}. Check browser console for details.`
       }

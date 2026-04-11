@@ -24,7 +24,7 @@ export default function ConnectionStatus() {
 
   const handleConnect = () => {
     const token = localStorage.getItem('aif_token')
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     if (token) {
       window.location.href = `${apiBase}/api/auth/jira/login?token=${token}`
     }

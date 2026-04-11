@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: 'http://localhost:8001/api',
+  baseURL: '/api',
 })
 
 // Add Bearer token to all requests (except preflight OPTIONS)

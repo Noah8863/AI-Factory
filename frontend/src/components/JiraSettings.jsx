@@ -34,7 +34,7 @@ function ErrorBanner({ message, onRetry }) {
 
 function DisconnectedPrompt() {
   const token   = localStorage.getItem('aif_token')
-  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
 
   return (
     <div className="js-disconnected">

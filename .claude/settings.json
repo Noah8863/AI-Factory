@@ -22,7 +22,17 @@
       "Bash(venv/Scripts/python -c ':*)",
       "Bash(cmd /c \"taskkill /F /PID 67252 & taskkill /F /PID 69304 & taskkill /F /PID 106712 & taskkill /F /PID 130024\")",
       "Read(//tmp/**)",
-      "Bash(cmd /c \"for /f \\\\\"tokens=5\\\\\" %a in \\('netstat -aon ^| findstr :8000'\\) do taskkill /F /PID %a\")"
+      "Bash(cmd /c \"for /f \\\\\"tokens=5\\\\\" %a in \\('netstat -aon ^| findstr :8000'\\) do taskkill /F /PID %a\")",
+      "Bash(python -c \"from api.routes.conversations import router; print\\('import OK'\\)\")",
+      "Bash(curl -s -X POST http://localhost:8001/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"test_diag@test.com\",\"username\":\"test_diag\",\"password\":\"test1234\",\"display_name\":\"Test\"}')",
+      "Bash(netstat -ano)",
+      "Bash(curl -s -X POST http://localhost:8001/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"celly@emai.com\",\"username\":\"celly\",\"password\":\"celly1234\",\"display_name\":\"celly\"}')",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8001/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"celly@emai.com\",\"username\":\"celly\",\"password\":\"celly1234\",\"display_name\":\"celly\"}')",
+      "Bash(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8000/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"celly@emai.com\",\"username\":\"celly\",\"password\":\"celly1234\",\"display_name\":\"celly\"}')",
+      "Bash(curl -v -X POST http://localhost:8001/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"celly2@test.com\",\"username\":\"celly2\",\"password\":\"celly1234\",\"display_name\":\"celly\"}')",
+      "Bash(tasklist /FI \"PID eq 23556\")",
+      "Bash(wmic process:*)",
+      "Bash(python -c \"import passlib, bcrypt; print\\('system passlib:', passlib.__version__\\); print\\('system bcrypt:', bcrypt.__version__\\)\")"
     ]
   }
 }
