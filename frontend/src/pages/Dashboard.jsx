@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking } from '../utils/api'
+import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking } from '../utils/api'
 import ChatThread from '../components/ChatThread'
 import Navbar from '../components/Navbar'
 import './Dashboard.scss'
