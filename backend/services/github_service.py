@@ -1,6 +1,5 @@
 import os
 import requests
-from git import Repo
 from dotenv import load_dotenv
 
 # This command looks for the .env file in your backend folder 
@@ -13,7 +12,11 @@ GITHUB_USERNAME = os.getenv("GITHUB_USERNAME")
 
 def get_repo():
     try:
+        from git import Repo
         return Repo(os.getcwd())
+    except ImportError:
+        print("❌ GitPython is not installed. Run: pip install GitPython")
+        return None
     except Exception as e:
         print(f"❌ Failed to get repo: {e}")
         return None
