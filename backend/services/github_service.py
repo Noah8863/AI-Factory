@@ -104,7 +104,7 @@ def create_org_repo(repo_name: str) -> dict | None:
         print(f"ℹ️ Repository already exists: {repo_url}")
         return {"url": repo_url, "created": False}
     else:
-        print(f"❌ Failed to create repo: {response.json()}")
+        print(f"❌ Failed to create repo (status {response.status_code}): {response.text}")
         return None
     
 def deploy_agent_work(repo_name: str, branch_name: str, commit_message: str):

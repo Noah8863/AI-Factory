@@ -6,6 +6,7 @@ individual capabilities (e.g. GitHub repo creation) in isolation.
 TODO: Remove this file before shipping to production.
 """
 import logging
+import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -35,9 +36,10 @@ def dev_create_github_repo(payload: CreateRepoRequest):
 
     result = create_org_repo(payload.repo_name)
     if result is None:
+        token_set = bool(os.getenv("GITHUB_TOKEN"))
         raise HTTPException(
             status_code=502,
-            detail="GitHub API call failed. Check GITHUB_TOKEN and org permissions.",
+            detail=f"GitHub API call failed. GITHUB_TOKEN present={token_set}. Check token permissions and org settings.",
         )
 
     return CreateRepoResponse(
