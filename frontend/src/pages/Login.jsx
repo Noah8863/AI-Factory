@@ -26,26 +26,28 @@ export default function Login() {
     setError('')
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!form.username.trim() || !form.password.trim()) {
-      setError('Please fill in all fields.')
-      return
-    }
-    setLoading(true)
-    const passwordHash = await sha256(form.password)
-    const usernameMatch = form.username.trim() === VALID_USERNAME
-    const passwordMatch = passwordHash === VALID_PASSWORD_HASH
-
-    if (!usernameMatch || !passwordMatch) {
-      setError('Invalid email or password.')
-      setLoading(false)
-      return
-    }
-
-    localStorage.setItem('aif_user', JSON.stringify({ username: form.username }))
-    navigate('/dashboard')
+const handleSubmit = async (e) => {
+  e.preventDefault()
+  if (!form.username.trim() || !form.password.trim()) {
+    setError('Please fill in all fields.')
+    return
   }
+  setLoading(true)
+  try {
+    const res = await api.post('/auth/login', {
+      email: form.username.trim(),
+      password: form.password,
+    })
+    const { access_token, user } = res.data
+    localStorage.setItem('aif_token', access_token)
+    localStorage.setItem('aif_user', JSON.stringify(user))
+    navigate('/dashboard')
+  } catch (err) {
+    setError(err.response?.data?.detail || 'Invalid email or password.')
+  } finally {
+    setLoading(false)
+  }
+}
 
   return (
     <div className="login-page">
