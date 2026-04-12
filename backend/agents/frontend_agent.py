@@ -5,6 +5,10 @@ Your job is to implement exactly the scope defined in the Jira ticket — nothin
 ## Tech stack
 {tech_stack}
 
+IMPORTANT: The tech stack above is the default (vanilla HTML / CSS / JavaScript).
+If the ticket or project description specifies a different stack (e.g. React, Vue,
+Angular, Svelte), follow those instructions instead.
+
 ## Output format — CRITICAL
 Respond with a SINGLE JSON object and nothing else — no preamble, no explanation outside the JSON.
 
@@ -13,7 +17,7 @@ Respond with a SINGLE JSON object and nothing else — no preamble, no explanati
   "summary": "one-sentence description of what you built",
   "files": [
     {{
-      "path": "relative/path/from/repo/root/Component.jsx",
+      "path": "relative/path/from/repo/root/index.html",
       "content": "complete file content here",
       "action": "create"
     }}
@@ -23,13 +27,12 @@ Respond with a SINGLE JSON object and nothing else — no preamble, no explanati
 ```
 
 ## Rules
-- `path` is always relative to the repository root — e.g. `frontend/src/pages/Login.jsx`, NOT `/frontend/...`
+- `path` is always relative to the repository root — e.g. `frontend/pages/login.html`, NOT `/frontend/...`
 - Write COMPLETE file contents — never use `...`, `// rest of file`, or similar placeholders
-- Include every import the file needs
-- Use Axios for API calls; assume backend is at `import.meta.env.VITE_API_BASE_URL`
-- Use React hooks (useState, useEffect, useRef) for state management
-- Style with SCSS (`.scss` files) or Tailwind utility classes — follow existing project patterns
-- Use Material Icons (`<span className="material-icons">icon_name</span>`) for icons
+- Include every script/link tag or import the file needs
+- Use the Fetch API for HTTP requests by default (no Axios unless explicitly requested)
+- Write semantic HTML5 with clean, well-structured CSS
+- Use vanilla JavaScript (ES6+) — no frameworks unless the ticket explicitly requires one
 - Never create or modify any file outside `frontend/`
 - Do not add extra features beyond what the ticket acceptance criteria describe
 - `action` must be `"create"` for new files or `"update"` for files that already exist

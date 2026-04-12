@@ -18,6 +18,12 @@ Focus on the most important unknowns first:
 - What are the 2–3 must-have features for a first version (MVP)?
 - Are there any technical constraints or preferences (e.g. preferred stack,
   existing systems to integrate with)?
+  If the user does not specify a tech stack, default to:
+    Backend:  Node.js + Express.js + MongoDB (Mongoose)
+    Frontend: Vanilla HTML, CSS, and JavaScript
+  If the user explicitly requests React, use React. If they request C#/.NET
+  or another stack, follow their preference. Only ask about tech stack if
+  they bring it up or if the project complexity warrants it.
 - What does "done" look like — how will you know the project is a success?
 - Any known non-goals or things explicitly out of scope?
 

@@ -169,3 +169,84 @@ def deploy_agent_work(repo_name: str, branch_name: str, commit_message: str):
         return f"🚀 Work successfully deployed to {repo_name}/{branch_name}"
     
     return "Failed at push step."
+
+
+def create_branch(repo_name: str, branch_name: str, base_branch: str = "main") -> bool:
+    """
+    Create a new branch in the remote repo from the tip of base_branch.
+
+    Uses the Git Refs API so no local clone is needed.
+    Returns True on success (or if the branch already exists), False on error.
+    """
+    token    = os.getenv("GITHUB_TOKEN")
+    org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
+    headers  = {
+        "Authorization": f"token {token}",
+        "Accept":        "application/vnd.github.v3+json",
+    }
+
+    # 1. Resolve the SHA of the base branch
+    ref_url = (
+        f"https://api.github.com/repos/{org_name}/{repo_name}"
+        f"/git/refs/heads/{base_branch}"
+    )
+    ref_resp = requests.get(ref_url, headers=headers)
+    if ref_resp.status_code != 200:
+        print(f"❌ Could not resolve base branch '{base_branch}': {ref_resp.text[:200]}")
+        return False
+
+    base_sha = ref_resp.json()["object"]["sha"]
+
+    # 2. Create the new branch ref
+    create_url = f"https://api.github.com/repos/{org_name}/{repo_name}/git/refs"
+    body = {
+        "ref": f"refs/heads/{branch_name}",
+        "sha": base_sha,
+    }
+    resp = requests.post(create_url, json=body, headers=headers)
+    if resp.status_code == 201:
+        return True
+    if resp.status_code == 422:
+        # Branch already exists — that's fine
+        return True
+
+    print(f"❌ Failed to create branch '{branch_name}': {resp.status_code} {resp.text[:200]}")
+    return False
+
+
+def create_pull_request(
+    repo_name: str,
+    branch_name: str,
+    base_branch: str = "main",
+    title: str = "",
+    body: str = "",
+) -> dict | None:
+    """
+    Open a pull request from *branch_name* → *base_branch*.
+
+    Returns {"url": str, "number": int} on success, None on failure.
+    """
+    token    = os.getenv("GITHUB_TOKEN")
+    org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
+    url      = f"https://api.github.com/repos/{org_name}/{repo_name}/pulls"
+    headers  = {
+        "Authorization": f"token {token}",
+        "Accept":        "application/vnd.github.v3+json",
+    }
+    payload = {
+        "title": title or f"AI Agent: {branch_name}",
+        "head":  branch_name,
+        "base":  base_branch,
+        "body":  body,
+    }
+
+    resp = requests.post(url, json=payload, headers=headers)
+    if resp.status_code in (200, 201):
+        data = resp.json()
+        return {"url": data.get("html_url", ""), "number": data.get("number", 0)}
+
+    print(
+        f"❌ Failed to create PR for {branch_name} → {base_branch}: "
+        f"{resp.status_code} {resp.text[:200]}"
+    )
+    return None

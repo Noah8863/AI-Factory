@@ -11,7 +11,7 @@ import os
 import anthropic
 
 from agents.frontend_agent import FRONTEND_SYSTEM_PROMPT, parse_developer_output
-from services.github_service import write_file_to_repo
+from services.github_service import write_file_to_repo, create_branch, create_pull_request
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 # Default tech stack injected into the system prompt.
 _TECH_STACK = os.getenv(
     "FRONTEND_TECH_STACK",
-    "React 18, Vite, SCSS modules, Tailwind CSS (utility classes), Axios, React Router v6, Material Icons",
+    "Vanilla JavaScript (ES6+), HTML5, CSS3, Fetch API for HTTP requests",
 )
 
 
@@ -92,10 +92,20 @@ async def run_frontend_task(
             f"Raw output preview: {raw[:300]}{'…' if len(raw) > 300 else ''}"
         )
 
-    # ── 3. Write files to GitHub ──────────────────────────────────────────────
+    # ── 3. Write files to GitHub (feature branch → PR) ────────────────────────
     files_written = 0
     file_errors   = []
+    branch_name   = f"{ticket.ticket_id}-{ticket.title[:40]}".lower().replace(" ", "-").rstrip("-")
+    pr_result     = None
+
     if repo_name:
+        # Create a feature branch for this ticket
+        if not create_branch(repo_name, branch_name):
+            logger.warning(
+                "Could not create branch %s — falling back to main.", branch_name,
+            )
+            branch_name = "main"
+
         for f in result.get("files", []):
             path    = f.get("path", "").strip("/")
             content = f.get("content", "")
@@ -103,22 +113,42 @@ async def run_frontend_task(
                 file_errors.append({"path": path or "(empty)", "error": "Missing path or content"})
                 continue
             try:
+                summary = result.get("summary", ticket.title)
                 ok = write_file_to_repo(
                     repo_name=repo_name,
                     file_path=path,
                     content=content,
-                    branch="main",
-                    commit_message=f"AI Frontend Dev [{ticket.ticket_id}]: {path}",
+                    branch=branch_name,
+                    commit_message=f"AI Agent: [{ticket.ticket_id}] {summary} — {path}",
                 )
                 if ok:
                     files_written += 1
-                    logger.info("Wrote %s → %s", path, repo_name)
+                    logger.info("Wrote %s → %s (%s)", path, repo_name, branch_name)
                 else:
                     file_errors.append({"path": path, "error": "GitHub API returned non-success status"})
                     logger.warning("Failed to write %s → %s", path, repo_name)
             except Exception as exc:
                 file_errors.append({"path": path, "error": f"{type(exc).__name__}: {exc}"})
                 logger.warning("Exception writing %s → %s: %s", path, repo_name, exc)
+
+        # Open a PR if we wrote to a feature branch
+        if branch_name != "main" and files_written > 0:
+            pr_body = (
+                f"## {ticket.ticket_id}: {ticket.title}\n\n"
+                f"{result.get('summary', '')}\n\n"
+                f"**Files changed:** {files_written}\n\n"
+                f"_Automated by AI Agent (Frontend)_"
+            )
+            pr_result = create_pull_request(
+                repo_name=repo_name,
+                branch_name=branch_name,
+                title=f"AI Agent: [{ticket.ticket_id}] {ticket.title}",
+                body=pr_body,
+            )
+            if pr_result:
+                logger.info("PR created: %s", pr_result["url"])
+            else:
+                logger.warning("Failed to create PR for branch %s.", branch_name)
     else:
         logger.warning(
             "No repo_name for ticket %s — skipping GitHub write.", ticket.ticket_id
@@ -126,4 +156,8 @@ async def run_frontend_task(
 
     result["files_written"] = files_written
     result["file_errors"]   = file_errors
+    result["branch"]        = branch_name
+    if pr_result:
+        result["pr_url"]    = pr_result["url"]
+        result["pr_number"] = pr_result["number"]
     return result
