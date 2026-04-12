@@ -60,7 +60,6 @@ export default function Dashboard() {
   const [devInProcess, setDevInProcess] = useState(false)
   const [agentRunError, setAgentRunError] = useState('')
   const [agentTickets, setAgentTickets] = useState([])       // TicketRead[]
-  const pollRef = useRef(null)
 
   // ── History state ────────────────────────────────────────────
   const [ideas, setIdeas] = useState([])
@@ -108,35 +107,18 @@ export default function Dashboard() {
     }
   }, [])
 
-  // ── Poll agent ticket progress while dev is in process ───────
-  useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current)
-
-    if (!devInProcess || !conversation) return
-
-    const poll = async () => {
-      try {
-        const res = await getAgentTickets(conversation.id)
-        const { tickets, still_pending } = res.data
-        setAgentTickets(tickets)
-        if (still_pending === 0) {
-          setDevInProcess(false)
-          clearInterval(pollRef.current)
-          pollRef.current = null
-        }
-      } catch {
-        // polling error — keep trying
-      }
+  // ── Fetch ticket status on demand (no polling) ──────────────
+  const fetchTickets = useCallback(async (convId) => {
+    if (!convId) return
+    try {
+      const res = await getAgentTickets(convId)
+      const { tickets, still_pending } = res.data
+      setAgentTickets(tickets)
+      setDevInProcess(still_pending > 0)
+    } catch {
+      // ticket endpoint not available yet — ignore
     }
-
-    poll() // immediate first fetch
-    pollRef.current = setInterval(poll, 5000)
-
-    return () => {
-      clearInterval(pollRef.current)
-      pollRef.current = null
-    }
-  }, [devInProcess, conversation?.id])
+  }, [])
 
   // ── Auto-save draft ──────────────────────────────────────────
   useEffect(() => {
@@ -192,16 +174,8 @@ export default function Dashboard() {
       setAgentRunError('')
       setActiveNav('chat')
 
-      // Check if dev agents are still working on this conversation
-      try {
-        const ticketRes = await getAgentTickets(conv.id)
-        const { tickets, still_pending } = ticketRes.data
-        setAgentTickets(tickets)
-        setDevInProcess(still_pending > 0)
-      } catch {
-        setAgentTickets([])
-        setDevInProcess(false)
-      }
+      // Fetch current ticket status for this conversation
+      await fetchTickets(conv.id)
     } catch {
       // no conversation yet or error — nothing to open
     } finally {
@@ -292,14 +266,17 @@ export default function Dashboard() {
       setTaskingResult({ jira_tickets_created, jira_error })
 
       // Backend auto-triggers dev agents after storing tickets.
-      // Start polling to track progress.
+      // Fetch ticket state once after a short delay so the UI shows them.
       setDevInProcess(true)
+      setTimeout(() => fetchTickets(conversation.id), 3000)
     } catch {
       setSendError('Failed to start tasking. Please try again.')
     } finally {
       setIsTaskingLoading(false)
     }
   }
+
+  const handleRefreshTickets = () => conversation && fetchTickets(conversation.id)
 
   const handleContinueChat = () => setShowReadyBanner(false)
   const handleBackFromChat  = () => { setActiveNav('new'); setTaskingResult(null) }
@@ -311,7 +288,7 @@ export default function Dashboard() {
       const res = await retryTicket(conversation.id, ticketDbId)
       const { tickets } = res.data
       setAgentTickets(tickets)
-      setDevInProcess(true)   // resume polling
+      setDevInProcess(true)
       setAgentRunError('')
     } catch (err) {
       const detail = err.response?.data?.detail || 'Failed to retry ticket. Please try again.'
@@ -653,6 +630,7 @@ export default function Dashboard() {
             onNoClose={handleNoClose}
             onAddMoreRequirements={handleAddMoreRequirements}
             onRetryTicket={handleRetryTicket}
+            onRefreshTickets={handleRefreshTickets}
             onGoToProfile={() => navigate('/profile')}
             onBack={handleBackFromChat}
           />

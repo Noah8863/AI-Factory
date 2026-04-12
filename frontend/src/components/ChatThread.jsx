@@ -98,6 +98,7 @@ export default function ChatThread({
   onNoClose,
   onAddMoreRequirements,
   onRetryTicket,
+  onRefreshTickets,
   onGoToProfile,
   onBack,
 }) {
@@ -221,6 +222,9 @@ export default function ChatThread({
             {agentTickets.length > 0 && (
               <p className="dev-progress__counts">
                 {agentTickets.filter(t => t.status === 'done').length}/{agentTickets.length} tickets done
+                <button className="dev-progress__refresh" onClick={onRefreshTickets} title="Refresh ticket status">
+                  <span className="material-icons">refresh</span>
+                </button>
               </p>
             )}
           </div>
