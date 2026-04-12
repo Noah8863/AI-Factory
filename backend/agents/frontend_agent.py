@@ -44,21 +44,22 @@ def parse_developer_output(raw_text: str) -> dict:
     import re
     import json
 
-    # Try ```json ... ``` fence first
-    m = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", raw_text)
-    if m:
-        try:
-            return json.loads(m.group(1))
-        except json.JSONDecodeError:
-            pass
-
-    # Fall back: find first JSON object via raw_decode (handles nested braces correctly)
+    # 1. Try raw_decode first — most robust, handles nested backticks in content
     idx = raw_text.find("{")
     if idx >= 0:
         decoder = json.JSONDecoder()
         try:
             obj, _ = decoder.raw_decode(raw_text, idx)
-            return obj
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+
+    # 2. Fall back to greedy regex on ```json fences
+    m = re.search(r"```(?:json)?\s*\n([\s\S]+)\n```", raw_text)
+    if m:
+        try:
+            return json.loads(m.group(1))
         except json.JSONDecodeError:
             pass
 

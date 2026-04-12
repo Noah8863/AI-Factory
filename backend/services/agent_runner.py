@@ -225,12 +225,20 @@ async def run_ticket(
 
     try:
         if ticket.type == "backend":
+            logger.info(
+                "Dispatching ticket %s to BACKEND agent (repo=%s).",
+                ticket.ticket_id, repo_name,
+            )
             result = await be_svc.run_backend_task(
                 ticket=ticket,
                 ticket_prompt=ticket_prompt,
                 repo_name=repo_name,
             )
         else:
+            logger.info(
+                "Dispatching ticket %s to FRONTEND agent (type=%s, repo=%s).",
+                ticket.ticket_id, ticket.type, repo_name,
+            )
             result = await fe_svc.run_frontend_task(
                 ticket=ticket,
                 ticket_prompt=ticket_prompt,
@@ -251,10 +259,12 @@ async def run_ticket(
         db.commit()
 
         logger.info(
-            "Ticket %s done. Files written: %d, file errors: %d.",
+            "Ticket %s done. Files written: %d, file errors: %d, branch: %s, PR: %s.",
             ticket.ticket_id,
             result.get("files_written", 0),
             len(file_errors),
+            result.get("branch", "?"),
+            result.get("pr_url", "none"),
         )
 
         # Transition Jira issue to Done (best-effort)

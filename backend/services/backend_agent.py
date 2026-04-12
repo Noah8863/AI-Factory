@@ -55,7 +55,7 @@ async def run_backend_task(
     try:
         response = _client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=8000,
+            max_tokens=16384,
             system=system_msg,
             messages=[{"role": "user", "content": ticket_prompt}],
         )
@@ -75,10 +75,26 @@ async def run_backend_task(
         ) from exc
 
     raw = response.content[0].text
-    logger.debug(
-        "Backend agent raw output for ticket %s (%d chars).",
-        ticket.ticket_id, len(raw),
+    stop_reason = response.stop_reason
+    logger.info(
+        "Backend agent response for ticket %s: %d chars, stop_reason=%s",
+        ticket.ticket_id, len(raw), stop_reason,
     )
+
+    if stop_reason == "max_tokens":
+        raise RuntimeError(
+            f"Backend agent response truncated (hit max_tokens) for ticket "
+            f"{ticket.ticket_id}. Output was {len(raw)} chars. "
+            f"The generated code was too long to fit in one response."
+            ticket.ticket_id, len(raw), stop_reason,
+    )
+
+    if stop_reason == "max_tokens":
+        raise RuntimeError(
+            f"Backend agent response truncated (hit max_tokens) for ticket "
+            f"{ticket.ticket_id}. Output was {len(raw)} chars. "
+            f"The generated code was too long to fit in one response."
+        )
 
     # ── 2. Parse output ───────────────────────────────────────────────────────
     result = parse_developer_output(raw)
@@ -153,6 +169,22 @@ async def run_backend_task(
     else:
         logger.warning(
             "No repo_name for ticket %s — skipping GitHub write.", ticket.ticket_id
+
+    # ── 4. Fail loudly if no files were actually pushed ────────────────────────
+    expected_files = len(result.get("files", []))
+    if expected_files == 0:
+        raise RuntimeError(
+            f"Backend agent produced no files for ticket {ticket.ticket_id}. "
+            f"The LLM response could not be parsed into actionable code. "
+            f"Raw output preview: {raw[:400]}"
+        )
+    if files_written == 0:
+        raise RuntimeError(
+            f"Backend agent generated {expected_files} file(s) for ticket "
+            f"{ticket.ticket_id} but all GitHub writes failed. "
+            f"Errors: {file_errors}"
+        )
+
         )
 
     result["files_written"] = files_written
@@ -161,4 +193,20 @@ async def run_backend_task(
     if pr_result:
         result["pr_url"]    = pr_result["url"]
         result["pr_number"] = pr_result["number"]
+
+    # ── 4. Fail loudly if no files were actually pushed ────────────────────────
+    expected_files = len(result.get("files", []))
+    if expected_files == 0:
+        raise RuntimeError(
+            f"Backend agent produced no files for ticket {ticket.ticket_id}. "
+            f"The LLM response could not be parsed into actionable code. "
+            f"Raw output preview: {raw[:400]}"
+        )
+    if files_written == 0:
+        raise RuntimeError(
+            f"Backend agent generated {expected_files} file(s) for ticket "
+            f"{ticket.ticket_id} but all GitHub writes failed. "
+            f"Errors: {file_errors}"
+        )
+
     return result
