@@ -111,15 +111,6 @@ export default function Dashboard() {
     }
   }, [])
 
-  // ── Poll active conversation tickets every 5 s while dev is running ──
-  const convPollRef = useRef(null)
-  useEffect(() => {
-    clearInterval(convPollRef.current)
-    if (!devInProcess || !conversation?.id) return
-    convPollRef.current = setInterval(() => fetchTickets(conversation.id), 5000)
-    return () => clearInterval(convPollRef.current)
-  }, [devInProcess, conversation?.id, fetchTickets])
-
   // ── Fetch ticket status on demand ───────────────────────────
   const fetchTickets = useCallback(async (convId) => {
     if (!convId) return
@@ -132,6 +123,15 @@ export default function Dashboard() {
       // ticket endpoint not available yet — ignore
     }
   }, [])
+
+  // ── Poll active conversation tickets every 5 s while dev is running ──
+  const convPollRef = useRef(null)
+  useEffect(() => {
+    clearInterval(convPollRef.current)
+    if (!devInProcess || !conversation?.id) return
+    convPollRef.current = setInterval(() => fetchTickets(conversation.id), 5000)
+    return () => clearInterval(convPollRef.current)
+  }, [devInProcess, conversation?.id, fetchTickets])
 
   // ── Fetch tickets for all ideas (My Ideas page) ─────────────
   const fetchAllIdeaTickets = useCallback(async (ideaList) => {
