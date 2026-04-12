@@ -4,10 +4,12 @@ from db.database import get_db
 from models.idea import Idea
 from models.conversation import Conversation
 from models.message import Message
+from models.ticket import Ticket
 from models.user import User
 from schemas.idea import IdeaCreate, IdeaRead
 from schemas.conversation import ConversationDetail, ConversationRead
 from schemas.message import MessageRead
+from schemas.ticket import AgentRunResponse, TicketRead
 from services.auth_service import get_current_user
 
 router = APIRouter(prefix="/ideas", tags=["ideas"])
@@ -104,3 +106,41 @@ def delete_idea(
 
     db.delete(idea)
     db.commit()
+
+
+@router.get("/{idea_id}/tickets", response_model=AgentRunResponse)
+def get_idea_tickets(
+    idea_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return ticket statuses for the most recent conversation of an idea."""
+    idea = db.query(Idea).filter(Idea.id == idea_id, Idea.user_id == current_user.id).first()
+    if not idea:
+        raise HTTPException(status_code=404, detail="Idea not found")
+
+    conversation = (
+        db.query(Conversation)
+        .filter(Conversation.idea_id == idea_id)
+        .order_by(Conversation.created_at.desc())
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="No conversation found for this idea")
+
+    tickets = (
+        db.query(Ticket)
+        .filter(Ticket.conversation_id == conversation.id)
+        .order_by(Ticket.sequence.asc().nullslast())
+        .all()
+    )
+    done = sum(1 for t in tickets if t.status == "done")
+    failed = sum(1 for t in tickets if t.status == "failed")
+    still_pending = sum(1 for t in tickets if t.status in ("pending", "in_progress"))
+    return AgentRunResponse(
+        conversation_id=conversation.id,
+        tickets=[TicketRead.model_validate(t) for t in tickets],
+        done=done,
+        failed=failed,
+        still_pending=still_pending,
+    )

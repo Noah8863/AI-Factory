@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking, getAgentTickets, retryTicket } from '../utils/api'
+import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking, getAgentTickets, getIdeaTickets, retryTicket } from '../utils/api'
 import ChatThread from '../components/ChatThread'
+import DevProgress from '../components/DevProgress'
 import Navbar from '../components/Navbar'
 import './Dashboard.scss'
 
@@ -70,6 +71,9 @@ export default function Dashboard() {
   const [deleteError, setDeleteError] = useState('')
   const [jiraStatus, setJiraStatus] = useState('loading')
 
+  // ── Idea-level ticket tracking (for My Ideas page) ──────────
+  const [ideaTicketsMap, setIdeaTicketsMap] = useState({})  // { [ideaId]: { tickets, stillPending } }
+
   // ── Auth guard ───────────────────────────────────────────────
   useEffect(() => { if (!user) navigate('/login') }, [])
 
@@ -119,6 +123,49 @@ export default function Dashboard() {
       // ticket endpoint not available yet — ignore
     }
   }, [])
+
+  // ── Fetch tickets for all ideas (My Ideas page) ─────────────
+  const fetchAllIdeaTickets = useCallback(async (ideaList) => {
+    const results = {}
+    await Promise.all(
+      ideaList.map(async (idea) => {
+        try {
+          const res = await getIdeaTickets(idea.id)
+          const { tickets, still_pending } = res.data
+          if (tickets.length > 0) {
+            results[idea.id] = { tickets, stillPending: still_pending }
+          }
+        } catch {
+          // No conversation or tickets for this idea — skip
+        }
+      })
+    )
+    setIdeaTicketsMap(prev => ({ ...prev, ...results }))
+    return results
+  }, [])
+
+  // Fetch idea tickets when switching to history tab, and poll while any are pending
+  const pollRef = useRef(null)
+  useEffect(() => {
+    if (activeNav !== 'history' || ideas.length === 0) {
+      clearInterval(pollRef.current)
+      return
+    }
+    // Initial fetch
+    fetchAllIdeaTickets(ideas).then((results) => {
+      const hasPending = Object.values(results).some(d => d.stillPending > 0)
+      if (hasPending) {
+        pollRef.current = setInterval(() => {
+          fetchAllIdeaTickets(ideas).then((r) => {
+            if (!Object.values(r).some(d => d.stillPending > 0)) {
+              clearInterval(pollRef.current)
+            }
+          })
+        }, 5000)
+      }
+    })
+    return () => clearInterval(pollRef.current)
+  }, [activeNav, ideas, fetchAllIdeaTickets])
 
   // ── Auto-save draft ──────────────────────────────────────────
   useEffect(() => {
@@ -322,6 +369,9 @@ export default function Dashboard() {
       const { conversation: conv, messages: msgs } = res.data
       setConversation(conv)
       setMessages(msgs)
+      // Agents are already running — fetch tickets so the progress panel populates
+      setDevInProcess(true)
+      fetchTickets(conv.id)
     } catch {
       setSendError('Something went wrong. Please try again.')
     }
@@ -675,6 +725,22 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <p className="idea-card__content">{truncate(idea.content)}</p>
+                      {ideaTicketsMap[idea.id] && (
+                        <DevProgress
+                          devInProcess={ideaTicketsMap[idea.id].stillPending > 0}
+                          agentTickets={ideaTicketsMap[idea.id].tickets}
+                          onRefreshTickets={() => {
+                            getIdeaTickets(idea.id).then(res => {
+                              const { tickets, still_pending } = res.data
+                              setIdeaTicketsMap(prev => ({
+                                ...prev,
+                                [idea.id]: { tickets, stillPending: still_pending },
+                              }))
+                            }).catch(() => {})
+                          }}
+                          compact
+                        />
+                      )}
                       <div className="idea-card__actions">
                         <button
                           className="idea-card__btn idea-card__btn--open"

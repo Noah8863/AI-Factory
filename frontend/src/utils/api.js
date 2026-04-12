@@ -40,6 +40,7 @@ api.interceptors.response.use(
 export const submitIdea          = (content) => api.post('/ideas', { content })
 export const getIdeas            = ()        => api.get('/ideas')
 export const getIdeaConversation = (ideaId)  => api.get(`/ideas/${ideaId}/conversation`)
+export const getIdeaTickets      = (ideaId)  => api.get(`/ideas/${ideaId}/tickets`)
 export const deleteIdea          = (ideaId)  => api.delete(`/ideas/${ideaId}`)
 
 // ── Conversations ────────────────────────────────────────────────────────────

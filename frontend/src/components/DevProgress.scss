@@ -1,0 +1,383 @@
+@use '../styles/variables' as *;
+
+// ─── Development progress panel ──────────────────────────────────────────────
+
+@keyframes hammer-swing {
+  0%   { transform: rotate(0deg); }
+  18%  { transform: rotate(-38deg); }
+  32%  { transform: rotate(-38deg); }
+  50%  { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes dev-dot-pulse {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
+  40%            { opacity: 1;    transform: scale(1);   }
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+
+@keyframes skeleton-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+.dev-progress {
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba($indigo, 0.22);
+  background: linear-gradient(180deg, rgba($indigo, 0.08) 0%, rgba($violet, 0.04) 100%);
+  animation: fadeUp 0.3s $ease-out both;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px 6px;
+  }
+
+  &__title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__hammer-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-origin: bottom right;
+    flex-shrink: 0;
+  }
+
+  &__hammer {
+    display: block;
+    font-size: 18px;
+    color: $indigo;
+    transform-origin: bottom right;
+    animation: hammer-swing 1.5s ease-in-out infinite;
+  }
+
+  &__done-icon {
+    font-size: 18px;
+    color: $emerald;
+  }
+
+  &__title {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: $text-primary;
+    letter-spacing: 0.01em;
+  }
+
+  &__dots {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    span {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: $indigo;
+      animation: dev-dot-pulse 1.4s ease-in-out infinite;
+
+      &:nth-child(2) { animation-delay: 0.2s; }
+      &:nth-child(3) { animation-delay: 0.4s; }
+    }
+  }
+
+  &__counts {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: $text-tertiary;
+    letter-spacing: 0.02em;
+  }
+
+  &__refresh {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: $radius-sm;
+    background: rgba($indigo, 0.08);
+    color: $indigo;
+    cursor: pointer;
+    transition: $transition;
+
+    .material-icons { font-size: 15px; }
+
+    &:hover {
+      background: rgba($indigo, 0.18);
+    }
+
+    &:active .material-icons {
+      animation: spin 0.4s linear;
+    }
+  }
+
+  // Progress bar
+  &__bar-track {
+    height: 3px;
+    margin: 0 20px 4px;
+    background: rgba($indigo, 0.12);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  &__bar-fill {
+    height: 100%;
+    background: $gradient-brand;
+    border-radius: 2px;
+    transition: width 0.6s $ease-out;
+  }
+
+  // Loading skeleton
+  &__skeleton {
+    padding: 0 20px 12px;
+  }
+
+  &__skeleton-bar {
+    height: 3px;
+    margin-bottom: 10px;
+    border-radius: 2px;
+    background: rgba($indigo, 0.12);
+    overflow: hidden;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      width: 40%;
+      background: $gradient-brand;
+      border-radius: 2px;
+      animation: skeleton-slide 1.4s ease-in-out infinite;
+    }
+  }
+
+  &__skeleton-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+
+    & + & { margin-top: 2px; }
+  }
+
+  &__skeleton-circle {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba($indigo, 0.1);
+    flex-shrink: 0;
+    animation: skeleton-pulse 1.2s ease-in-out infinite;
+  }
+
+  &__skeleton-id {
+    width: 36px;
+    height: 10px;
+    border-radius: 3px;
+    background: rgba($indigo, 0.1);
+    flex-shrink: 0;
+    animation: skeleton-pulse 1.2s ease-in-out 0.1s infinite;
+  }
+
+  &__skeleton-title {
+    flex: 1;
+    height: 10px;
+    border-radius: 3px;
+    background: rgba($indigo, 0.08);
+    animation: skeleton-pulse 1.2s ease-in-out 0.2s infinite;
+  }
+
+  &__skeleton-badge {
+    width: 48px;
+    height: 16px;
+    border-radius: $radius-full;
+    background: rgba($indigo, 0.08);
+    flex-shrink: 0;
+    animation: skeleton-pulse 1.2s ease-in-out 0.3s infinite;
+  }
+
+  // Ticket list
+  &__list {
+    list-style: none;
+    margin: 0;
+    padding: 0 16px 10px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  &__ticket {
+    display: flex;
+    flex-direction: column;
+    padding: 5px 6px;
+    border-radius: $radius-sm;
+    font-size: 0.75rem;
+
+    &--active {
+      background: rgba($indigo, 0.08);
+    }
+
+    &--failed {
+      background: rgba($rose, 0.05);
+    }
+  }
+
+  &__ticket-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  &__ticket-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+
+    &--done    { color: $emerald; }
+    &--active  { color: $indigo; animation: spin 1.2s linear infinite; }
+    &--failed  { color: $rose; }
+    &--pending { color: $text-tertiary; }
+  }
+
+  &__ticket-id {
+    font-weight: 700;
+    color: $text-secondary;
+    flex-shrink: 0;
+    min-width: 44px;
+  }
+
+  &__ticket-title {
+    flex: 1;
+    color: $text-primary;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__ticket-badge {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 1px 8px;
+    border-radius: $radius-full;
+    letter-spacing: 0.02em;
+    text-transform: capitalize;
+    flex-shrink: 0;
+
+    &--done    { color: $emerald; background: rgba($emerald, 0.12); }
+    &--active  { color: $indigo;  background: rgba($indigo, 0.12); }
+    &--failed  { color: $rose;    background: rgba($rose, 0.1); }
+    &--pending { color: $text-tertiary; background: rgba($text-tertiary, 0.1); }
+  }
+
+  &__ticket-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: $radius-sm;
+    background: rgba($rose, 0.1);
+    color: $rose;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: $transition;
+
+    .material-icons { font-size: 16px; }
+
+    &:hover { background: rgba($rose, 0.2); }
+  }
+
+  &__ticket-retry {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 8px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    font-family: inherit;
+    color: $indigo;
+    background: rgba($indigo, 0.1);
+    border: 1px solid rgba($indigo, 0.2);
+    border-radius: $radius-full;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: $transition;
+
+    .material-icons { font-size: 13px; }
+
+    &:hover {
+      background: rgba($indigo, 0.18);
+      border-color: rgba($indigo, 0.4);
+    }
+  }
+
+  &__ticket-error {
+    margin-top: 6px;
+    margin-left: 22px;
+    padding: 8px 10px;
+    background: rgba($rose, 0.06);
+    border: 1px solid rgba($rose, 0.15);
+    border-radius: $radius-sm;
+    animation: fadeUp 0.2s $ease-out both;
+  }
+
+  &__ticket-error-pre {
+    margin: 0;
+    font-size: 0.6875rem;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    color: $text-secondary;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  // ── Compact variant (for idea cards) ───────────────────────────────────────
+  &--compact {
+    border-bottom: none;
+    border-radius: $radius-md;
+    margin-top: 14px;
+    border: 1px solid rgba($indigo, 0.15);
+
+    .dev-progress__header {
+      padding: 8px 14px 4px;
+    }
+
+    .dev-progress__bar-track {
+      margin: 0 14px 4px;
+    }
+
+    .dev-progress__skeleton {
+      padding: 0 14px 10px;
+    }
+
+    .dev-progress__list {
+      padding: 0 10px 8px;
+      max-height: 160px;
+    }
+
+    .dev-progress__ticket-error-pre {
+      max-height: 120px;
+    }
+  }
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
