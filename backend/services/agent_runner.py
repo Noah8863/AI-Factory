@@ -382,9 +382,15 @@ async def run_all_tickets(
 
     # ── Post-completion: CI/CD + README (only when every ticket is done) ─────
     if still_pending == 0 and all_failed == 0 and conversation.github_repo_name:
+        import os
         from services.github_service import deploy_ci_workflow, write_file_to_repo
 
-        repo = conversation.github_repo_name
+        repo     = conversation.github_repo_name
+        org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
+
+        # GitHub Pages URL is deterministic: https://<org>.github.io/<repo>/
+        # We know this before the workflow runs, so we can embed it in the README.
+        live_url = f"https://{org_name}.github.io/{repo}/"
 
         # 1. Deploy GitHub Actions CI/CD workflow
         logger.info(
@@ -423,8 +429,12 @@ async def run_all_tickets(
             # Derive a human-friendly project name from the repo slug
             project_name = repo.replace("-", " ").title()
 
-            logger.info("Generating README.md for %s …", repo)
-            readme_md = generate_readme(history, project_name=project_name)
+            logger.info("Generating README.md for %s (live_url=%s) …", repo, live_url)
+            readme_md = generate_readme(
+                history,
+                project_name=project_name,
+                live_url=live_url,
+            )
 
             ok = write_file_to_repo(
                 repo_name=repo,
@@ -434,7 +444,7 @@ async def run_all_tickets(
                 commit_message="AI Agent: add project README.md",
             )
             if ok:
-                logger.info("README.md committed to %s.", repo)
+                logger.info("README.md committed to %s (includes live URL: %s).", repo, live_url)
             else:
                 logger.warning("Failed to write README.md to %s.", repo)
         except Exception as exc:

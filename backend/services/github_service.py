@@ -264,37 +264,45 @@ name: CI / CD
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 jobs:
   backend:
     name: Backend – Build & Test
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-      - run: npm install
-      - run: npm test --if-present
-      - run: npm run lint --if-present
+      - name: Run backend checks (if backend/ exists)
+        run: |
+          if [ ! -d backend ]; then
+            echo "No backend/ directory found — skipping backend job."
+            exit 0
+          fi
+          cd backend
+          if [ -f requirements.txt ]; then
+            python -m pip install --upgrade pip
+            pip install -r requirements.txt
+          fi
+          if [ -f package.json ]; then
+            npm install
+            npm test --if-present
+            npm run lint --if-present
+          fi
 
   frontend:
     name: Frontend – Build
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-      - run: |
+      - name: Build frontend (if frontend/ exists)
+        run: |
+          if [ ! -d frontend ]; then
+            echo "No frontend/ directory found — skipping frontend build."
+            exit 0
+          fi
+          cd frontend
           if [ -f package.json ]; then
             npm install
             npm run build --if-present
@@ -317,9 +325,9 @@ jobs:
         with:
           node-version: 18
       - name: Build frontend
-        working-directory: frontend
         run: |
-          if [ -f package.json ]; then
+          if [ -d frontend ] && [ -f frontend/package.json ]; then
+            cd frontend
             npm install
             npm run build --if-present
           fi
@@ -330,8 +338,10 @@ jobs:
             cp -r frontend/dist/* _site/
           elif [ -d frontend/build ]; then
             cp -r frontend/build/* _site/
-          else
+          elif [ -d frontend ]; then
             cp -r frontend/* _site/ 2>/dev/null || true
+          else
+            echo "No frontend output found to deploy."
           fi
       - uses: actions/upload-pages-artifact@v3
         with:

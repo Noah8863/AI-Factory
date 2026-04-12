@@ -120,30 +120,47 @@ Include these sections (skip any that don't apply):
 
 1. **Project title** — as an H1
 2. **Description** — 2-3 sentences explaining what the project is and who it's for
-3. **Features** — bullet list of key features
-4. **Tech Stack** — backend and frontend technologies used
-5. **Getting Started**
+3. **Live Demo** — if a live URL is provided, include it as a clickable link here
+4. **Features** — bullet list of key features
+5. **Tech Stack** — backend and frontend technologies used
+6. **Getting Started**
    - Prerequisites
    - Installation steps for backend and frontend
    - Environment variables needed (use placeholder values)
    - How to run the project locally
-6. **Project Structure** — brief overview of the folder layout
-7. **API Endpoints** — table of key endpoints if it's a web app (method, path, description)
-8. **License** — default to MIT
+7. **Project Structure** — brief overview of the folder layout
+8. **API Endpoints** — table of key endpoints if it's a web app (method, path, description)
+9. **License** — default to MIT
 
 Keep it concise and practical. Output ONLY the raw Markdown — no code fences
 wrapping the entire document, no preamble, no explanation.
 """
 
 
-def generate_readme(history: list[dict], project_name: str = "Project") -> str:
+def generate_readme(
+    history: list[dict],
+    project_name: str = "Project",
+    live_url: str | None = None,
+) -> str:
     """
     Generate a README.md from the PM conversation history.
 
+    Args:
+        history:      PM conversation messages (role/content dicts).
+        project_name: Human-friendly project title derived from the repo slug.
+        live_url:     Optional GitHub Pages URL to embed in the Live Demo section.
+
     Returns the raw Markdown string ready to be committed to the repo.
     """
+    live_url_line = (
+        f"The project is deployed and live at: {live_url}\n"
+        "Include this URL in the Live Demo section.\n\n"
+        if live_url
+        else ""
+    )
     readme_prompt = (
         f"The project is called \"{project_name}\".\n\n"
+        f"{live_url_line}"
         "Based on the conversation history above, write a README.md for this project.\n"
         "The project has already been built and deployed. Write the README as if it "
         "is being added to the repository root."
