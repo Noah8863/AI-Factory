@@ -33,7 +33,9 @@
       "Bash(tasklist /FI \"PID eq 23556\")",
       "Bash(wmic process:*)",
       "Bash(python -c \"import passlib, bcrypt; print\\('system passlib:', passlib.__version__\\); print\\('system bcrypt:', bcrypt.__version__\\)\")",
-      "Bash(find . -type f -name \"*.py\" -exec grep -l \"deploy\\\\|github\\\\|git\\\\|push\\\\|branch\\\\|pull_request\\\\|pr_\" {} \\\\;)"
+      "Bash(find . -type f -name \"*.py\" -exec grep -l \"deploy\\\\|github\\\\|git\\\\|push\\\\|branch\\\\|pull_request\\\\|pr_\" {} \\\\;)",
+      "Bash(grep -n \"@media\" \"c:/Users/White Yeti/Desktop/AI-Factory/frontend/src/pages\"/*.scss)",
+      "Bash(grep -h \"@media\" \"c:/Users/White Yeti/Desktop/AI-Factory/frontend/src/pages\"/*.scss \"c:/Users/White Yeti/Desktop/AI-Factory/frontend/src/components\"/*.scss)"
     ]
   }
 }

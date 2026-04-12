@@ -123,10 +123,12 @@ export default function Dashboard() {
     try {
       const res = await getAgentTickets(convId)
       const { tickets, still_pending } = res.data
-      setAgentTickets(tickets)
-      setDevInProcess(still_pending > 0)
+      setAgentTickets(tickets ?? [])
+      setDevInProcess((still_pending ?? 0) > 0)
     } catch {
-      // ticket endpoint not available yet — ignore
+      // No tickets yet for this conversation — clear any stale state
+      setAgentTickets([])
+      setDevInProcess(false)
     }
   }, [])
 
@@ -206,6 +208,12 @@ export default function Dashboard() {
     }
     setSubmitting(true)
     setInputError('')
+    // Reset all conversation-specific state before opening the new chat
+    setAgentTickets([])
+    setDevInProcess(false)
+    setAgentRunError('')
+    setTaskingResult(null)
+    setSendError('')
     try {
       const res = await startConversation(text.trim())
       const { conversation: conv, messages: msgs } = res.data
@@ -226,15 +234,21 @@ export default function Dashboard() {
   // ── Re-open a past idea's chat ───────────────────────────────
   const handleOpenIdeaChat = async (idea) => {
     setOpeningIdeaId(idea.id)
+    // Clear previous idea's state immediately so there's no flash of stale data
+    setConversation(null)
+    setMessages([])
+    setAgentTickets([])
+    setDevInProcess(false)
+    setAgentRunError('')
+    setTaskingResult(null)
+    setSendError('')
+    setShowReadyBanner(false)
     try {
       const res = await getIdeaConversation(idea.id)
       const { conversation: conv, messages: msgs } = res.data
       setConversation(conv)
       setMessages(msgs)
       setShowReadyBanner(conv.status === 'ready_to_task')
-      setTaskingResult(null)
-      setSendError('')
-      setAgentRunError('')
       setActiveNav('chat')
 
       // Fetch current ticket status for this conversation

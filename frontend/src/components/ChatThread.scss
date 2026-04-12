@@ -28,6 +28,16 @@
   border-bottom: 1px solid $border-subtle;
   background: $bg-surface;
   flex-shrink: 0;
+
+  @media (max-width: 480px) {
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  @media (max-width: 360px) {
+    gap: 8px;
+    padding: 10px 12px;
+  }
 }
 
 .chat-thread__back {
@@ -45,12 +55,20 @@
   font-family: inherit;
   transition: $transition;
   white-space: nowrap;
+  flex-shrink: 0;
 
   .material-icons { font-size: 16px; }
 
   &:hover {
     background: $bg-elevated;
     color: $text-primary;
+  }
+
+  // Hide the label on very small screens — icon alone is sufficient
+  @media (max-width: 380px) {
+    padding: 6px 8px;
+
+    span:not(.material-icons) { display: none; }
   }
 }
 
@@ -983,7 +1001,13 @@
   background: rgba($indigo, 0.07);
   border-top: 1px solid $border-accent;
   flex-shrink: 0;
+  flex-wrap: wrap;
   animation: fadeUp 0.3s $ease-out both;
+
+  @media (max-width: 480px) {
+    padding: 14px 16px;
+    gap: 10px;
+  }
 
   &__spinner {
     width: 28px;
@@ -1114,6 +1138,11 @@
     border-color: rgba($indigo, 0.5);
     transform: translateY(-1px);
   }
+
+  @media (max-width: 480px) {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 // ─── Persistent "Start Building" bar (re-tasking) ────────────────────────────
@@ -1155,6 +1184,11 @@
     cursor: not-allowed;
     box-shadow: none;
     transform: none;
+  }
+
+  @media (max-width: 480px) {
+    width: 100%;
+    justify-content: center;
   }
 }
 

@@ -81,6 +81,10 @@
     padding: 96px 24px 64px;
     display: flex;
     justify-content: center;
+
+    @media (max-width: 480px) {
+      padding: 84px 12px 48px;
+    }
   }
 
   &__header {
@@ -104,7 +108,7 @@
   }
 
   &__title {
-    font-size: 1.75rem;
+    font-size: clamp(1.375rem, 6vw, 1.75rem);
     font-weight: 800;
     background: $gradient-text;
     -webkit-background-clip: text;
@@ -350,6 +354,11 @@
       background: linear-gradient(135deg, $emerald 0%, color.adjust($emerald, $lightness: -10%) 100%);
       box-shadow: 0 0 20px rgba($emerald, 0.25);
     }
+
+    @media (max-width: 480px) {
+      align-self: stretch;
+      justify-content: center;
+    }
   }
 
   &__spinner {
@@ -473,9 +482,14 @@
   &__desc {
     font-size: 0.8125rem;
     color: $text-tertiary;
-    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+
+    @media (max-width: 480px) {
+      white-space: normal;
+      line-height: 1.4;
+    }
   }
 
   &__right {
@@ -620,6 +634,10 @@
     display: flex;
     align-items: center;
     gap: 10px;
+
+    @media (max-width: 360px) {
+      flex-wrap: wrap;
+    }
   }
 
   &__select {
