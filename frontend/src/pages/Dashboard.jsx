@@ -7,6 +7,7 @@ import Navbar from '../components/Navbar'
 import './Dashboard.scss'
 
 const JIRA_REQUIRED_MESSAGE = 'Please connect your Jira account before making a project.'
+const JIRA_PROJECT_REQUIRED_MESSAGE = 'Please select a target Jira project on your Profile page before starting a chat.'
 
 const TEMPLATES = [
   { label: 'Web App',       icon: 'language',     text: 'Build a web application that ' },
@@ -70,6 +71,7 @@ export default function Dashboard() {
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [jiraStatus, setJiraStatus] = useState('loading')
+  const [jiraProjectSelected, setJiraProjectSelected] = useState(true) // assume true until checked
 
   // ── Idea-level ticket tracking (for My Ideas page) ──────────
   const [ideaTicketsMap, setIdeaTicketsMap] = useState({})  // { [ideaId]: { tickets, stillPending } }
@@ -98,11 +100,13 @@ export default function Dashboard() {
       .then((res) => {
         if (!cancelled) {
           setJiraStatus(res.data.connected ? 'connected' : 'disconnected')
+          setJiraProjectSelected(!!res.data.project_selected)
         }
       })
       .catch(() => {
         if (!cancelled) {
           setJiraStatus('disconnected')
+          setJiraProjectSelected(false)
         }
       })
 
@@ -165,16 +169,18 @@ export default function Dashboard() {
       const hasPending = Object.values(results).some(d => d.stillPending > 0)
       if (hasPending) {
         pollRef.current = setInterval(() => {
+          fetchIdeas()                       // refresh idea statuses (pills)
           fetchAllIdeaTickets(ideas).then((r) => {
             if (!Object.values(r).some(d => d.stillPending > 0)) {
               clearInterval(pollRef.current)
+              fetchIdeas()                   // final refresh to show "Completed"
             }
           })
         }, 5000)
       }
     })
     return () => clearInterval(pollRef.current)
-  }, [activeNav, ideas, fetchAllIdeaTickets])
+  }, [activeNav, ideas, fetchAllIdeaTickets, fetchIdeas])
 
   // ── Auto-save draft ──────────────────────────────────────────
   useEffect(() => {
@@ -195,6 +201,10 @@ export default function Dashboard() {
     if (!text.trim()) return
     if (jiraStatus !== 'connected') {
       setInputError(JIRA_REQUIRED_MESSAGE)
+      return
+    }
+    if (!jiraProjectSelected) {
+      setInputError(JIRA_PROJECT_REQUIRED_MESSAGE)
       return
     }
     setSubmitting(true)
@@ -274,6 +284,10 @@ export default function Dashboard() {
       setSendError(JIRA_REQUIRED_MESSAGE)
       return
     }
+    if (!jiraProjectSelected) {
+      setSendError(JIRA_PROJECT_REQUIRED_MESSAGE)
+      return
+    }
     setSendError('')
 
     const optimisticMsg = {
@@ -306,6 +320,10 @@ export default function Dashboard() {
     if (!conversation) return
     if (jiraStatus !== 'connected') {
       setSendError(JIRA_REQUIRED_MESSAGE)
+      return
+    }
+    if (!jiraProjectSelected) {
+      setSendError(JIRA_PROJECT_REQUIRED_MESSAGE)
       return
     }
     setShowReadyBanner(false)
@@ -586,6 +604,26 @@ export default function Dashboard() {
               </div>
             )}
 
+            {jiraStatus === 'connected' && !jiraProjectSelected && (
+              <div className="jira-required-banner">
+                <div className="jira-required-banner__icon">
+                  <span className="material-icons">folder_off</span>
+                </div>
+                <div className="jira-required-banner__body">
+                  <p className="jira-required-banner__title">Jira project required</p>
+                  <p className="jira-required-banner__text">
+                    {JIRA_PROJECT_REQUIRED_MESSAGE}
+                  </p>
+                </div>
+                <button
+                  className="jira-required-banner__action"
+                  onClick={() => navigate('/profile')}
+                >
+                  Go to Profile
+                </button>
+              </div>
+            )}
+
             <div className="templates">
               <p className="templates__label">
                 <span className="material-icons">bolt</span>
@@ -597,7 +635,7 @@ export default function Dashboard() {
                     key={t.label}
                     className="template-chip"
                     onClick={() => handleTemplate(t)}
-                    disabled={jiraStatus !== 'connected'}
+                    disabled={jiraStatus !== 'connected' || !jiraProjectSelected}
                   >
                     <span className="material-icons">{t.icon}</span>
                     {t.label}
@@ -615,7 +653,7 @@ export default function Dashboard() {
                 onChange={(e) => setText(e.target.value)}
                 maxLength={MAX_CHARS}
                 spellCheck
-                disabled={jiraStatus !== 'connected'}
+                disabled={jiraStatus !== 'connected' || !jiraProjectSelected}
               />
               <div className="idea-input__footer">
                 <div className="idea-input__meta">
@@ -632,7 +670,7 @@ export default function Dashboard() {
                 <button
                   className="idea-input__submit"
                   onClick={handleSubmit}
-                  disabled={jiraStatus !== 'connected' || !text.trim() || submitting || charCount > MAX_CHARS}
+                  disabled={jiraStatus !== 'connected' || !jiraProjectSelected || !text.trim() || submitting || charCount > MAX_CHARS}
                 >
                   {submitting ? (
                     <><span className="idea-input__spinner" />Starting…</>
@@ -681,7 +719,8 @@ export default function Dashboard() {
             agentRunError={agentRunError}
             agentTickets={agentTickets}
             jiraStatus={jiraStatus}
-            jiraRequiredMessage={JIRA_REQUIRED_MESSAGE}
+            jiraProjectSelected={jiraProjectSelected}
+            jiraRequiredMessage={jiraStatus !== 'connected' ? JIRA_REQUIRED_MESSAGE : JIRA_PROJECT_REQUIRED_MESSAGE}
             onSendMessage={handleSendMessage}
             onContinueChat={handleContinueChat}
             onStartTasking={handleStartTasking}

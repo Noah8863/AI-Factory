@@ -443,6 +443,25 @@ async def run_all_tickets(
                 "Failed to generate/commit README.md for %s: %s", repo, exc,
             )
 
+    # ── Update idea status based on final ticket outcomes ─────────────────────
+    if conversation and conversation.idea_id:
+        from models.idea import Idea
+        idea = db.get(Idea, conversation.idea_id)
+        if idea:
+            if still_pending == 0 and all_failed == 0:
+                idea.status = "completed"
+            elif still_pending == 0 and done_count > 0:
+                # Some done, some failed — still mark completed
+                idea.status = "completed"
+            elif still_pending == 0 and done_count == 0:
+                # Everything failed — revert to pending so user can retry
+                idea.status = "pending"
+            db.commit()
+            logger.info(
+                "Idea %s status → %s (done=%d, failed=%d, pending=%d)",
+                idea.id, idea.status, done_count, all_failed, still_pending,
+            )
+
     return {
         "done":          done_count,
         "failed":        fail_count,

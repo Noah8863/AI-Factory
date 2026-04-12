@@ -45,6 +45,9 @@ _optional_bearer = HTTPBearer(auto_error=False)
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 JIRA_REQUIRED_MESSAGE = "Please connect your Jira account before making a project."
+JIRA_PROJECT_REQUIRED_MESSAGE = (
+    "Please select a target Jira project on your Profile page before starting a chat."
+)
 
 
 def _get_owned_conversation(
@@ -64,9 +67,11 @@ def _get_owned_conversation(
 
 
 def _ensure_jira_connected(user_id: int, db: Session) -> None:
-    connected = db.query(JiraToken).filter(JiraToken.user_id == user_id).first() is not None
-    if not connected:
+    token_row = db.query(JiraToken).filter(JiraToken.user_id == user_id).first()
+    if not token_row:
         raise HTTPException(status_code=403, detail=JIRA_REQUIRED_MESSAGE)
+    if not token_row.jira_project_key:
+        raise HTTPException(status_code=403, detail=JIRA_PROJECT_REQUIRED_MESSAGE)
 
 
 def _build_detail(conversation: Conversation, db: Session) -> ConversationDetail:
@@ -387,7 +392,13 @@ async def start_tasking(
             db=db,
         )
 
-        # ── 5. Auto-start dev agents in the background ──────────────
+        # ── 5. Mark idea as processing ──────────────────────────────
+        idea = db.query(Idea).filter(Idea.id == conversation.idea_id).first()
+        if idea:
+            idea.status = "processing"
+            db.commit()
+
+        # ── 6. Auto-start dev agents in the background ──────────────
         background_tasks.add_task(run_all_tickets_bg, conversation_id, user_id)
         logger.info(
             "Dev agents queued in background for conversation %s.",

@@ -283,10 +283,10 @@ def jira_status(
     except (JWTError, KeyError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired token.")
 
-    connected = (
-        db.query(JiraToken).filter(JiraToken.user_id == user_id).first() is not None
-    )
-    return {"connected": connected}
+    token_row = db.query(JiraToken).filter(JiraToken.user_id == user_id).first()
+    connected = token_row is not None
+    project_selected = bool(token_row and token_row.jira_project_key)
+    return {"connected": connected, "project_selected": project_selected}
 
 
 @router.get("/projects")

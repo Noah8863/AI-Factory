@@ -81,6 +81,7 @@ export default function ChatThread({
   messages,
   status,
   jiraStatus,
+  jiraProjectSelected,
   jiraRequiredMessage,
   isSending,
   sendError,
@@ -108,7 +109,7 @@ export default function ChatThread({
   const inputRef = useRef(null)
   const isTasking = status === 'tasking'
   const isDone    = status === 'done'
-  const isJiraBlocked = jiraStatus !== 'connected'
+  const isJiraBlocked = jiraStatus !== 'connected' || !jiraProjectSelected
 
   // Cycling phrase state for the loading overlay
   const [phraseIndex, setPhraseIndex] = useState(0)
@@ -226,16 +227,18 @@ export default function ChatThread({
         {isJiraBlocked && (
           <div className="chat-thread__jira-lockout" role="alert">
             <div className="chat-thread__jira-lockout-icon">
-              <span className="material-icons">link_off</span>
+              <span className="material-icons">{jiraStatus !== 'connected' ? 'link_off' : 'folder_off'}</span>
             </div>
             <div className="chat-thread__jira-lockout-body">
               <p className="chat-thread__jira-lockout-title">{jiraRequiredMessage}</p>
               <p className="chat-thread__jira-lockout-text">
-                Connect Jira from your profile to continue chatting with the PM agent.
+                {jiraStatus !== 'connected'
+                  ? 'Connect Jira from your profile to continue chatting with the PM agent.'
+                  : 'Select a target Jira project from your profile to continue.'}
               </p>
             </div>
             <button className="chat-thread__jira-lockout-action" onClick={onGoToProfile}>
-              Connect Jira
+              {jiraStatus !== 'connected' ? 'Connect Jira' : 'Go to Profile'}
             </button>
           </div>
         )}
@@ -348,7 +351,7 @@ export default function ChatThread({
             <textarea
               ref={inputRef}
               className="chat-thread__input"
-              placeholder={isJiraBlocked ? 'Connect Jira to continue chatting' : 'Reply to the PM agent…'}
+              placeholder={isJiraBlocked ? (jiraStatus !== 'connected' ? 'Connect Jira to continue chatting' : 'Select a Jira project to continue') : 'Reply to the PM agent…'}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
