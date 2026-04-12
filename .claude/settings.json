@@ -32,7 +32,8 @@
       "Bash(curl -v -X POST http://localhost:8001/api/auth/register -H 'Content-Type: application/json' -d '{\"email\":\"celly2@test.com\",\"username\":\"celly2\",\"password\":\"celly1234\",\"display_name\":\"celly\"}')",
       "Bash(tasklist /FI \"PID eq 23556\")",
       "Bash(wmic process:*)",
-      "Bash(python -c \"import passlib, bcrypt; print\\('system passlib:', passlib.__version__\\); print\\('system bcrypt:', bcrypt.__version__\\)\")"
+      "Bash(python -c \"import passlib, bcrypt; print\\('system passlib:', passlib.__version__\\); print\\('system bcrypt:', bcrypt.__version__\\)\")",
+      "Bash(find . -type f -name \"*.py\" -exec grep -l \"deploy\\\\|github\\\\|git\\\\|push\\\\|branch\\\\|pull_request\\\\|pr_\" {} \\\\;)"
     ]
   }
 }

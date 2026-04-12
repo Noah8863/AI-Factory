@@ -259,12 +259,11 @@ async def run_ticket(
         db.commit()
 
         logger.info(
-            "Ticket %s done. Files written: %d, file errors: %d, branch: %s, PR: %s.",
+            "Ticket %s done. Files written: %d, file errors: %d, branch: %s.",
             ticket.ticket_id,
             result.get("files_written", 0),
             len(file_errors),
             result.get("branch", "?"),
-            result.get("pr_url", "none"),
         )
 
         # Transition Jira issue to Done (best-effort)

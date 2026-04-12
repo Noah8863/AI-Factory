@@ -96,11 +96,12 @@ def delete_idea(
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
 
-    # Delete messages → conversations → idea (respect FK order)
+    # Delete tickets → messages → conversations → idea (respect FK order)
     conv_ids = [
         c.id for c in db.query(Conversation.id).filter(Conversation.idea_id == idea_id).all()
     ]
     if conv_ids:
+        db.query(Ticket).filter(Ticket.conversation_id.in_(conv_ids)).delete(synchronize_session=False)
         db.query(Message).filter(Message.conversation_id.in_(conv_ids)).delete(synchronize_session=False)
         db.query(Conversation).filter(Conversation.idea_id == idea_id).delete(synchronize_session=False)
 
