@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -19,7 +19,7 @@ from schemas.conversation import (
 )
 from schemas.message import MessageCreate, MessageRead
 from services import pm_agent
-from services.agent_runner import store_tickets
+from services.agent_runner import store_tickets, run_all_tickets_bg
 from services.github_service import create_org_repo
 from services.jira_service import create_jira_project, push_tickets_to_jira, JiraServiceError
 from models.user import User
@@ -202,6 +202,7 @@ def send_message(
 @router.post("/{conversation_id}/start-tasking", response_model=TaskingResult)
 async def start_tasking(
     conversation_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -384,6 +385,13 @@ async def start_tasking(
             tickets_data=tickets_data,
             jira_results=jira_tickets_created,
             db=db,
+        )
+
+        # ── 5. Auto-start dev agents in the background ──────────────
+        background_tasks.add_task(run_all_tickets_bg, conversation_id, user_id)
+        logger.info(
+            "Dev agents queued in background for conversation %s.",
+            conversation_id,
         )
 
     # ── Persist the trigger message + friendly agent confirmation ───

@@ -78,4 +78,8 @@ export const runAgents = (conversationId) =>
 export const getAgentTickets = (conversationId) =>
   api.get(`/agents/${conversationId}/tickets`)
 
+/** Retry a single failed ticket and re-queue agent execution. */
+export const retryTicket = (conversationId, ticketDbId) =>
+  api.post(`/agents/${conversationId}/tickets/${ticketDbId}/retry`)
+
 export default api

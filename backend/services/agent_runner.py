@@ -27,6 +27,7 @@ Public API
 import asyncio
 import json
 import logging
+import traceback
 from datetime import datetime
 
 from sqlalchemy.orm import Session
@@ -36,6 +37,24 @@ from models.conversation import Conversation
 from models.ticket import Ticket
 
 logger = logging.getLogger(__name__)
+
+
+def _build_error_msg(exc: Exception, stage: str = "unknown") -> str:
+    """
+    Build a structured, human-readable error message that preserves:
+    - The exception class name
+    - The stage of execution that failed
+    - The full exception message
+    - The last 5 frames of the traceback
+    """
+    tb_lines = traceback.format_exception(type(exc), exc, exc.__traceback__)
+    # Keep only the last 5 frames to avoid huge blobs
+    short_tb = "".join(tb_lines[-6:])  # -6 because the last entry is the exception line itself
+    return (
+        f"[{type(exc).__name__}] Stage: {stage}\n"
+        f"{exc}\n"
+        f"--- traceback (last 5 frames) ---\n{short_tb}"
+    )
 
 
 # ── Ticket storage ────────────────────────────────────────────────────────────
@@ -218,15 +237,24 @@ async def run_ticket(
                 repo_name=repo_name,
             )
 
+        # Check for partial failures (files that failed to write to GitHub)
+        file_errors = result.get("file_errors", [])
+        if file_errors:
+            logger.warning(
+                "Ticket %s completed with %d file write failure(s): %s",
+                ticket.ticket_id, len(file_errors), file_errors,
+            )
+
         ticket.agent_output = json.dumps(result)
         ticket.status       = "done"
         ticket.updated_at   = datetime.utcnow()
         db.commit()
 
         logger.info(
-            "Ticket %s done. Files written: %d.",
+            "Ticket %s done. Files written: %d, file errors: %d.",
             ticket.ticket_id,
             result.get("files_written", 0),
+            len(file_errors),
         )
 
         # Transition Jira issue to Done (best-effort)
@@ -242,9 +270,23 @@ async def run_ticket(
         return True
 
     except Exception as exc:
-        logger.exception("Ticket %s failed: %s", ticket.ticket_id, exc)
+        # Determine the failure stage from the exception context
+        stage = "agent_execution"
+        exc_type = type(exc).__name__
+        if "anthropic" in type(exc).__module__.lower() if hasattr(type(exc), '__module__') and type(exc).__module__ else False:
+            stage = "llm_api_call"
+        elif "github" in str(exc).lower() or "requests" in exc_type.lower():
+            stage = "github_write"
+        elif "json" in exc_type.lower() or "parse" in str(exc).lower():
+            stage = "output_parsing"
+
+        error_msg = _build_error_msg(exc, stage)
+        logger.exception(
+            "Ticket %s failed at stage '%s': %s",
+            ticket.ticket_id, stage, exc,
+        )
         ticket.status     = "failed"
-        ticket.error_msg  = str(exc)
+        ticket.error_msg  = error_msg
         ticket.updated_at = datetime.utcnow()
         db.commit()
         return False
@@ -300,9 +342,23 @@ async def run_all_tickets(
             *[run_ticket(t.id, user_id, conversation, db) for t in batch],
             return_exceptions=True,
         )
-        for ok in results:
+        for i, ok in enumerate(results):
             if ok is True:
                 done_count += 1
+            elif isinstance(ok, Exception):
+                # asyncio.gather caught an unhandled exception
+                fail_count += 1
+                t = batch[i]
+                ticket_row = db.get(Ticket, t.id)
+                if ticket_row and ticket_row.status != "failed":
+                    ticket_row.status    = "failed"
+                    ticket_row.error_msg = _build_error_msg(ok, "unhandled_gather_exception")
+                    ticket_row.updated_at = datetime.utcnow()
+                    db.commit()
+                logger.exception(
+                    "Unhandled exception in asyncio.gather for ticket %s: %s",
+                    t.ticket_id, ok,
+                )
             else:
                 fail_count += 1
 

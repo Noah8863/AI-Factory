@@ -90,16 +90,19 @@ export default function ChatThread({
   hasBeenTasked,
   devInProcess,
   agentRunError,
+  agentTickets,
   onSendMessage,
   onContinueChat,
   onStartTasking,
   onYesContinue,
   onNoClose,
   onAddMoreRequirements,
+  onRetryTicket,
   onGoToProfile,
   onBack,
 }) {
   const [input, setInput] = useState('')
+  const [expandedErrors, setExpandedErrors] = useState({})
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const isTasking = status === 'tasking'
@@ -195,16 +198,102 @@ export default function ChatThread({
         </div>
       </div>
 
-      {/* ── Development in process banner ─────────────────────── */}
-      {devInProcess && !agentRunError && (
-        <div className="dev-banner">
-          <div className="dev-banner__hammer-wrap">
-            <span className="material-icons dev-banner__hammer">hardware</span>
+      {/* ── Dev agent progress panel ──────────────────────────── */}
+      {(devInProcess || agentTickets.length > 0) && !agentRunError && (
+        <div className="dev-progress">
+          <div className="dev-progress__header">
+            <div className="dev-progress__title-row">
+              {devInProcess ? (
+                <>
+                  <div className="dev-progress__hammer-wrap">
+                    <span className="material-icons dev-progress__hammer">hardware</span>
+                  </div>
+                  <p className="dev-progress__title">Development in progress</p>
+                  <div className="dev-progress__dots"><span /><span /><span /></div>
+                </>
+              ) : (
+                <>
+                  <span className="material-icons dev-progress__done-icon">check_circle</span>
+                  <p className="dev-progress__title">Development complete</p>
+                </>
+              )}
+            </div>
+            {agentTickets.length > 0 && (
+              <p className="dev-progress__counts">
+                {agentTickets.filter(t => t.status === 'done').length}/{agentTickets.length} tickets done
+              </p>
+            )}
           </div>
-          <p className="dev-banner__text">Development in process</p>
-          <div className="dev-banner__dots">
-            <span /><span /><span />
-          </div>
+          {agentTickets.length > 0 && (
+            <div className="dev-progress__bar-track">
+              <div
+                className="dev-progress__bar-fill"
+                style={{
+                  width: `${(agentTickets.filter(t => t.status === 'done').length / agentTickets.length) * 100}%`,
+                }}
+              />
+            </div>
+          )}
+          {agentTickets.length > 0 && (
+            <ul className="dev-progress__list">
+              {agentTickets.map(ticket => {
+                const statusIcon =
+                  ticket.status === 'done'        ? 'check_circle' :
+                  ticket.status === 'in_progress' ? 'sync' :
+                  ticket.status === 'failed'      ? 'error' :
+                                                    'schedule'
+                const statusClass =
+                  ticket.status === 'done'        ? 'done' :
+                  ticket.status === 'in_progress' ? 'active' :
+                  ticket.status === 'failed'      ? 'failed' :
+                                                    'pending'
+                const isExpanded = !!expandedErrors[ticket.id]
+                const hasFailed = ticket.status === 'failed' && ticket.error_msg
+                return (
+                  <li key={ticket.id} className={`dev-progress__ticket dev-progress__ticket--${statusClass}`}>
+                    <div className="dev-progress__ticket-row">
+                      <span className={`material-icons dev-progress__ticket-icon dev-progress__ticket-icon--${statusClass}`}>
+                        {statusIcon}
+                      </span>
+                      <span className="dev-progress__ticket-id">{ticket.ticket_id}</span>
+                      <span className="dev-progress__ticket-title">{ticket.title}</span>
+                      <span className={`dev-progress__ticket-badge dev-progress__ticket-badge--${statusClass}`}>
+                        {ticket.status === 'in_progress' ? 'building' : ticket.status}
+                      </span>
+                      {hasFailed && (
+                        <>
+                          <button
+                            className="dev-progress__ticket-toggle"
+                            onClick={() =>
+                              setExpandedErrors(prev => ({ ...prev, [ticket.id]: !prev[ticket.id] }))
+                            }
+                            title={isExpanded ? 'Hide error details' : 'Show error details'}
+                          >
+                            <span className="material-icons">
+                              {isExpanded ? 'expand_less' : 'expand_more'}
+                            </span>
+                          </button>
+                          <button
+                            className="dev-progress__ticket-retry"
+                            onClick={() => onRetryTicket(ticket.id)}
+                            title="Retry this ticket"
+                          >
+                            <span className="material-icons">refresh</span>
+                            Retry
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    {hasFailed && isExpanded && (
+                      <div className="dev-progress__ticket-error">
+                        <pre className="dev-progress__ticket-error-pre">{ticket.error_msg}</pre>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
       )}
 
