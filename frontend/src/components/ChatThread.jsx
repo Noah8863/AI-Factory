@@ -88,6 +88,8 @@ export default function ChatThread({
   isTaskingLoading,
   repoUrl,
   hasBeenTasked,
+  devInProcess,
+  agentRunError,
   onSendMessage,
   onContinueChat,
   onStartTasking,
@@ -192,6 +194,27 @@ export default function ChatThread({
           </div>
         </div>
       </div>
+
+      {/* ── Development in process banner ─────────────────────── */}
+      {devInProcess && !agentRunError && (
+        <div className="dev-banner">
+          <div className="dev-banner__hammer-wrap">
+            <span className="material-icons dev-banner__hammer">hardware</span>
+          </div>
+          <p className="dev-banner__text">Development in process</p>
+          <div className="dev-banner__dots">
+            <span /><span /><span />
+          </div>
+        </div>
+      )}
+
+      {/* ── Agent run error banner ─────────────────────────────── */}
+      {agentRunError && (
+        <div className="dev-banner dev-banner--error">
+          <span className="material-icons">error</span>
+          <p className="dev-banner__text">{agentRunError}</p>
+        </div>
+      )}
 
       {/* ── Messages ───────────────────────────────────────────── */}
       <div className="chat-thread__messages">

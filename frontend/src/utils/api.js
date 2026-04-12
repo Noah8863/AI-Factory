@@ -67,4 +67,15 @@ export const reopenConversation = (conversationId) =>
 export const declineTasking = (conversationId) =>
   api.post(`/conversations/${conversationId}/decline-tasking`)
 
+// ── Agent runner ─────────────────────────────────────────────────────────────
+
+/** Kick off AI developer agents for all pending tickets. Returns immediately;
+ *  agents run in the background. Poll getAgentTickets() for progress. */
+export const runAgents = (conversationId) =>
+  api.post(`/agents/${conversationId}/run`)
+
+/** Poll ticket execution status for a conversation. */
+export const getAgentTickets = (conversationId) =>
+  api.get(`/agents/${conversationId}/tickets`)
+
 export default api

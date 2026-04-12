@@ -467,6 +467,81 @@
   }
 }
 
+// ─── Development in process banner ───────────────────────────────────────────
+
+@keyframes hammer-swing {
+  0%   { transform: rotate(0deg); }
+  18%  { transform: rotate(-38deg); }
+  32%  { transform: rotate(-38deg); }
+  50%  { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes dev-dot-pulse {
+  0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
+  40%            { opacity: 1;    transform: scale(1);   }
+}
+
+.dev-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  background: linear-gradient(90deg, rgba($indigo, 0.13) 0%, rgba($violet, 0.08) 100%);
+  border-bottom: 1px solid rgba($indigo, 0.22);
+  flex-shrink: 0;
+
+  &--error {
+    background: rgba($rose, 0.1);
+    border-bottom-color: rgba($rose, 0.25);
+
+    .material-icons { color: $rose; font-size: 18px; }
+    .dev-banner__text { color: $rose; }
+  }
+
+  &__hammer-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    // Pivot at the bottom-right so it swings like a real hammer handle
+    transform-origin: bottom right;
+    flex-shrink: 0;
+  }
+
+  &__hammer {
+    display: block;
+    font-size: 20px;
+    color: $indigo;
+    transform-origin: bottom right;
+    animation: hammer-swing 1.5s ease-in-out infinite;
+  }
+
+  &__text {
+    flex: 1;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: $text-primary;
+    letter-spacing: 0.015em;
+  }
+
+  &__dots {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+
+    span {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: $indigo;
+      animation: dev-dot-pulse 1.4s ease-in-out infinite;
+
+      &:nth-child(2) { animation-delay: 0.2s; }
+      &:nth-child(3) { animation-delay: 0.4s; }
+    }
+  }
+}
+
 // ─── Tasking loading overlay ──────────────────────────────────────────────────
 
 .tasking-overlay {

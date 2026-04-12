@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking } from '../utils/api'
+import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking, runAgents } from '../utils/api'
 import ChatThread from '../components/ChatThread'
 import Navbar from '../components/Navbar'
 import './Dashboard.scss'
@@ -57,6 +57,8 @@ export default function Dashboard() {
   const [showReadyBanner, setShowReadyBanner] = useState(false)
   const [taskingResult, setTaskingResult] = useState(null)   // { jira_tickets_created, jira_error }
   const [isTaskingLoading, setIsTaskingLoading] = useState(false)
+  const [devInProcess, setDevInProcess] = useState(false)
+  const [agentRunError, setAgentRunError] = useState('')
 
   // ── History state ────────────────────────────────────────────
   const [ideas, setIdeas] = useState([])
@@ -235,12 +237,26 @@ export default function Dashboard() {
     setShowReadyBanner(false)
     setTaskingResult(null)
     setIsTaskingLoading(true)
+    setDevInProcess(false)
+    setAgentRunError('')
     try {
       const res = await startTasking(conversation.id)
       const { conversation: conv, messages: msgs, jira_tickets_created, jira_error } = res.data
       setConversation(conv)
       setMessages(msgs)
       setTaskingResult({ jira_tickets_created, jira_error })
+
+      // Auto-start agents only when Jira sync succeeded
+      if (!jira_error) {
+        try {
+          await runAgents(conv.id)
+          setDevInProcess(true)
+        } catch (agentErr) {
+          const detail =
+            agentErr.response?.data?.detail || 'Failed to start agent development. Please try again.'
+          setAgentRunError(detail)
+        }
+      }
     } catch {
       setSendError('Failed to start tasking. Please try again.')
     } finally {
@@ -261,6 +277,8 @@ export default function Dashboard() {
       setMessages(msgs)
       setTaskingResult(null)
       setShowReadyBanner(false)
+      setDevInProcess(false)
+      setAgentRunError('')
     } catch {
       setSendError('Failed to reopen conversation. Please try again.')
     }
@@ -289,6 +307,8 @@ export default function Dashboard() {
       setMessages(msgs)
       setTaskingResult(null)
       setShowReadyBanner(false)
+      setDevInProcess(false)
+      setAgentRunError('')
     } catch {
       setSendError('Failed to reopen conversation. Please try again.')
     }
@@ -567,6 +587,8 @@ export default function Dashboard() {
             isTaskingLoading={isTaskingLoading}
             repoUrl={conversation.github_repo_url ?? null}
             hasBeenTasked={!!conversation.jira_project_key}
+            devInProcess={devInProcess}
+            agentRunError={agentRunError}
             jiraStatus={jiraStatus}
             jiraRequiredMessage={JIRA_REQUIRED_MESSAGE}
             onSendMessage={handleSendMessage}
