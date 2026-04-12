@@ -1,3 +1,4 @@
+import base64
 import os
 import requests
 from dotenv import load_dotenv
@@ -107,6 +108,53 @@ def create_org_repo(repo_name: str) -> dict | None:
         print(f"❌ Failed to create repo (status {response.status_code}): {response.text}")
         return None
     
+def write_file_to_repo(
+    repo_name: str,
+    file_path: str,
+    content: str,
+    branch: str = "main",
+    commit_message: str = "",
+) -> bool:
+    """
+    Create or update a single file in a GitHub repo via the Contents API.
+    The org is read from GITHUB_ORG (defaults to AI-Factory-Repos).
+
+    Returns True on success, False on failure.
+    """
+    token    = os.getenv("GITHUB_TOKEN")
+    org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
+    url      = f"https://api.github.com/repos/{org_name}/{repo_name}/contents/{file_path}"
+
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept":        "application/vnd.github.v3+json",
+    }
+
+    # If the file already exists we need its SHA to perform an update.
+    sha: str | None = None
+    existing = requests.get(url, headers=headers, params={"ref": branch})
+    if existing.status_code == 200:
+        sha = existing.json().get("sha")
+
+    body: dict = {
+        "message": commit_message or f"AI Dev: add {file_path}",
+        "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+        "branch":  branch,
+    }
+    if sha:
+        body["sha"] = sha
+
+    resp = requests.put(url, json=body, headers=headers)
+    if resp.status_code in (200, 201):
+        return True
+
+    print(
+        f"❌ Failed to write {file_path} to {repo_name}: "
+        f"{resp.status_code} {resp.text[:200]}"
+    )
+    return False
+
+
 def deploy_agent_work(repo_name: str, branch_name: str, commit_message: str):
     # 1. Ensure the repo exists in the Org
     if not create_org_repo(repo_name):

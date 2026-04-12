@@ -26,8 +26,14 @@ function LoadingView() {
 }
 
 // ── Success view ──────────────────────────────────────────────────────────────
-function SuccessView({ navigate }) {
+function SuccessView({ navigate, returnTo }) {
   const burst = [0, 45, 90, 135, 180, 225, 270, 315]
+
+  useEffect(() => {
+    const timer = setTimeout(() => navigate(returnTo), 2000)
+    return () => clearTimeout(timer)
+  }, [navigate, returnTo])
+
   return (
     <div className="jira-cb__state jira-cb__state--success">
       <div className="jira-cb__badge jira-cb__badge--success">
@@ -45,21 +51,16 @@ function SuccessView({ navigate }) {
 
       <h2 className="jira-cb__title">Jira Connected!</h2>
       <p className="jira-cb__sub">
-        Your Jira workspace is now linked. Tickets will be automatically
-        created during your PM Agent sessions.
+        Your Jira workspace is now linked. Redirecting you back…
       </p>
 
       <button
         className="jira-cb__btn jira-cb__btn--primary"
-        onClick={() => navigate('/dashboard')}
+        onClick={() => navigate(returnTo)}
       >
-        <span className="material-icons">rocket_launch</span>
-        Continue to Workspace
+        <span className="material-icons">arrow_back</span>
+        Go Back Now
       </button>
-
-      <Link to="/dashboard" className="jira-cb__link">
-        Go to account settings
-      </Link>
     </div>
   )
 }
@@ -100,6 +101,9 @@ export default function JiraCallback() {
   const [status, setStatus] = useState('loading')
   const [errorMsg, setErrorMsg] = useState('')
 
+  // Where to send the user after a successful connection
+  const returnTo = localStorage.getItem('aif_jira_return_to') || '/dashboard'
+
   useEffect(() => {
     const success = searchParams.get('success')
     const error   = searchParams.get('error')
@@ -132,6 +136,7 @@ export default function JiraCallback() {
       })
       .then((res) => {
         if (res.data.connected) {
+          localStorage.removeItem('aif_jira_return_to')
           setStatus('success')
         } else {
           setErrorMsg('Token was not saved correctly. Please try connecting again.')
@@ -162,7 +167,7 @@ export default function JiraCallback() {
         </Link>
 
         {status === 'loading' && <LoadingView />}
-        {status === 'success' && <SuccessView navigate={navigate} />}
+        {status === 'success' && <SuccessView navigate={navigate} returnTo={returnTo} />}
         {status === 'error'   && <ErrorView message={errorMsg} navigate={navigate} />}
       </div>
     </div>

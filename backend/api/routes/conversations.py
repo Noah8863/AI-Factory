@@ -19,6 +19,7 @@ from schemas.conversation import (
 )
 from schemas.message import MessageCreate, MessageRead
 from services import pm_agent
+from services.agent_runner import store_tickets
 from services.github_service import create_org_repo
 from services.jira_service import create_jira_project, push_tickets_to_jira, JiraServiceError
 from models.user import User
@@ -374,6 +375,16 @@ async def start_tasking(
                 "Jira ticket push failed for conversation %s: %s",
                 conversation_id, exc,
             )
+
+    # ── 4. Persist tickets to local DB for agent tracking ───────────
+    # This must happen after the Jira push so we can map Jira issue keys.
+    if tickets_data and tickets_data.get("tickets"):
+        store_tickets(
+            conversation_id=conversation_id,
+            tickets_data=tickets_data,
+            jira_results=jira_tickets_created,
+            db=db,
+        )
 
     # ── Persist the trigger message + friendly agent confirmation ───
     # The raw LLM reply (result["agent_reply"]) is the JSON dump used to

@@ -348,21 +348,53 @@ async def create_jira_project(
 
 # ── Ticket creation ───────────────────────────────────────────────────────────
 
-def _build_adf_description(text: str) -> dict:
+def _build_adf_description(
+    text: str,
+    phase: str | None = None,
+    sequence: int | None = None,
+    depends_on: list[str] | None = None,
+) -> dict:
     """
     Wrap plain text in Atlassian Document Format (ADF), which is required
     by the Jira REST API v3 description field.
+
+    When phase / sequence / depends_on are provided, a metadata header is
+    prepended so developers can see ordering context directly in Jira.
     """
-    return {
-        "type":    "doc",
-        "version": 1,
-        "content": [
-            {
-                "type":    "paragraph",
-                "content": [{"type": "text", "text": text}],
-            }
-        ],
-    }
+    content = []
+
+    # ── Metadata header ───────────────────────────────────────────────────────
+    meta_parts: list[str] = []
+    if phase:
+        meta_parts.append(f"Phase: {phase}")
+    if sequence is not None:
+        meta_parts.append(f"Sequence: {sequence}")
+    if depends_on:
+        meta_parts.append(f"Depends on: {', '.join(depends_on)}")
+    else:
+        meta_parts.append("Depends on: none (can start immediately)")
+
+    if meta_parts:
+        content.append({
+            "type": "paragraph",
+            "content": [
+                {
+                    "type":  "text",
+                    "text":  " | ".join(meta_parts),
+                    "marks": [{"type": "strong"}],
+                }
+            ],
+        })
+        # Horizontal rule to visually separate metadata from body
+        content.append({"type": "rule"})
+
+    # ── Main description body ─────────────────────────────────────────────────
+    content.append({
+        "type":    "paragraph",
+        "content": [{"type": "text", "text": text}],
+    })
+
+    return {"type": "doc", "version": 1, "content": content}
 
 
 async def _create_single_ticket(
@@ -380,13 +412,39 @@ async def _create_single_ticket(
     """
     url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/issue"
 
-    # Merge the PM-agent label list with the ticket type so it's easy to
-    # filter in Jira (e.g. label:backend or label:frontend).
+    # ── Labels ────────────────────────────────────────────────────────────────
+    # Start with any labels the PM agent explicitly set, then add structured
+    # metadata labels so tickets can be filtered/sorted in Jira board views.
     labels = list(ticket.get("labels", []))
+
     ticket_type = ticket.get("type", "")
     if ticket_type and ticket_type not in labels:
         labels.insert(0, ticket_type)
 
+    phase    = ticket.get("phase") or ""
+    sequence = ticket.get("sequence")
+    depends_on: list[str] = ticket.get("dependsOn") or []
+
+    # phase label — e.g. "phase-foundation"
+    if phase:
+        phase_label = "phase-" + phase.lower().replace(" ", "-")
+        if phase_label not in labels:
+            labels.append(phase_label)
+
+    # sequence label — e.g. "seq-03" (zero-padded so Jira sorts correctly)
+    if sequence is not None:
+        seq_label = f"seq-{int(sequence):02d}"
+        if seq_label not in labels:
+            labels.append(seq_label)
+
+    # dependency labels — e.g. "depends-be-1"
+    for dep in depends_on:
+        dep_label = "depends-" + dep.lower().replace("-", "").replace("_", "")
+        # keep it short enough for Jira (max 255 chars, no spaces)
+        if dep_label not in labels:
+            labels.append(dep_label)
+
+    # ── Priority ──────────────────────────────────────────────────────────────
     # Jira priority names must match an existing priority in the project.
     priority_name = _PRIORITY_MAP.get(ticket.get("priority", "Medium"), "Medium")
 
@@ -394,7 +452,12 @@ async def _create_single_ticket(
         "fields": {
             "project":     {"key": project_key},
             "summary":     ticket.get("title", "(No title)"),
-            "description": _build_adf_description(ticket.get("description", "")),
+            "description": _build_adf_description(
+                ticket.get("description", ""),
+                phase=phase or None,
+                sequence=sequence,
+                depends_on=depends_on or None,
+            ),
             "issuetype":   {"name": issue_type},
             "priority":    {"name": priority_name},
             "labels":      labels,
@@ -481,6 +544,159 @@ async def _get_project_issue_type(access_token: str, cloud_id: str, project_key:
     return "Task"  # last resort
 
 
+# ── Ticket fetching ───────────────────────────────────────────────────────────
+
+async def fetch_project_tickets(
+    user_id:     int,
+    db:          Session,
+    project_key: str,
+    cloud_id:    str | None = None,
+    ticket_type: str | None = None,   # "backend" | "frontend" | None (all)
+) -> list[dict]:
+    """
+    Fetch Jira issues from a project via JQL, optionally filtered by type label.
+
+    Returns a list of simplified issue dicts:
+        [{"key": str, "summary": str, "status": str, "labels": list, "priority": str | None}, ...]
+    """
+    access_token = await get_valid_access_token(user_id, db)
+    if not access_token:
+        raise JiraServiceError("User has no connected Jira account.")
+
+    if not cloud_id:
+        token_row = db.query(JiraToken).filter(JiraToken.user_id == user_id).first()
+        if token_row and token_row.jira_cloud_id:
+            cloud_id = token_row.jira_cloud_id
+        else:
+            resources = await _get_accessible_resources(access_token)
+            cloud_id  = resources[0]["id"]
+
+    url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/search"
+    jql = f'project = "{project_key}"'
+    if ticket_type:
+        jql += f' AND labels = "{ticket_type}"'
+    jql += " ORDER BY created ASC"
+
+    issues: list[dict] = []
+    start_at = 0
+    per_page = 50
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        while True:
+            try:
+                resp = await client.get(
+                    url,
+                    params={
+                        "jql":        jql,
+                        "startAt":    start_at,
+                        "maxResults": per_page,
+                        "fields":     "summary,status,labels,priority",
+                    },
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Accept":        "application/json",
+                    },
+                )
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise JiraServiceError(
+                    "Failed to fetch Jira issues (%s): %s"
+                    % (exc.response.status_code, exc.response.text)
+                ) from exc
+
+            data  = resp.json()
+            batch = data.get("issues", [])
+            issues.extend(batch)
+
+            if len(batch) < per_page or data.get("total", 0) <= start_at + len(batch):
+                break
+            start_at += per_page
+
+    return [
+        {
+            "key":      issue["key"],
+            "summary":  issue["fields"]["summary"],
+            "status":   issue["fields"]["status"]["name"],
+            "labels":   issue["fields"].get("labels", []),
+            "priority": (issue["fields"].get("priority") or {}).get("name"),
+        }
+        for issue in issues
+    ]
+
+
+async def transition_jira_issue(
+    user_id:       int,
+    db:            Session,
+    cloud_id:      str,
+    issue_key:     str,
+    target_status: str,   # e.g. "In Progress" | "Done"
+) -> bool:
+    """
+    Move a Jira issue to a new status by finding the matching transition.
+    Returns True on success, False on failure (always non-fatal — caller logs).
+    """
+    access_token = await get_valid_access_token(user_id, db)
+    if not access_token:
+        return False
+
+    transitions_url = (
+        f"https://api.atlassian.com/ex/jira/{cloud_id}"
+        f"/rest/api/3/issue/{issue_key}/transitions"
+    )
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get(
+                transitions_url,
+                headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+            )
+            resp.raise_for_status()
+        except httpx.HTTPStatusError:
+            logger.warning("Could not fetch transitions for %s.", issue_key)
+            return False
+
+    transitions  = resp.json().get("transitions", [])
+    target_lower = target_status.lower()
+
+    # Exact name match first, then partial match
+    match = next(
+        (t for t in transitions if t["name"].lower() == target_lower),
+        None,
+    ) or next(
+        (t for t in transitions if target_lower in t["name"].lower()),
+        None,
+    )
+
+    if not match:
+        logger.warning(
+            "No matching transition for '%s' on %s. Available: %s",
+            target_status, issue_key, [t["name"] for t in transitions],
+        )
+        return False
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.post(
+                transitions_url,
+                json={"transition": {"id": match["id"]}},
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type":  "application/json",
+                    "Accept":        "application/json",
+                },
+            )
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            logger.warning(
+                "Failed to transition %s to '%s': %s",
+                issue_key, target_status, exc.response.text,
+            )
+            return False
+
+    logger.info("Transitioned %s → '%s'.", issue_key, target_status)
+    return True
+
+
 # ── Main public entry point ───────────────────────────────────────────────────
 
 async def push_tickets_to_jira(
@@ -527,9 +743,25 @@ async def push_tickets_to_jira(
     # ── Step 3: resolve issue type for this project ──────────────
     issue_type = await _get_project_issue_type(access_token, cloud_id, project_key)
 
-    # ── Step 4: create tickets (sequentially to respect rate limits) ──
+    # ── Step 4: sort tickets by sequence so Jira receives them in
+    #    dependency order — tickets with lower sequence numbers are
+    #    created first, which means they appear at the top of the
+    #    backlog and AI developer agents encounter them first.
+    #    Tickets without a sequence field sort to the end.
+    def _seq(t: dict) -> int:
+        v = t.get("sequence")
+        return int(v) if v is not None else 9999
+
+    ordered_tickets = sorted(tickets, key=_seq)
+
+    logger.info(
+        "Ticket creation order: %s",
+        [f"{t.get('id', '?')}(seq={t.get('sequence', '?')})" for t in ordered_tickets],
+    )
+
+    # ── Step 5: create tickets (sequentially to respect rate limits) ──
     results = []
-    for ticket in tickets:
+    for ticket in ordered_tickets:
         result = await _create_single_ticket(access_token, cloud_id, project_key, ticket, issue_type)
         results.append(result)
         logger.info(

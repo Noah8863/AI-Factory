@@ -10,12 +10,14 @@ from models import message as _msg_model            # noqa: F401
 from models import user as _user_model              # noqa: F401
 from models import user_settings as _user_settings_model  # noqa: F401
 from models import jira_token as _jira_token_model        # noqa: F401
+from models import ticket as _ticket_model                 # noqa: F401
 from api.routes.ideas import router as ideas_router
 from api.routes.conversations import router as conversations_router
 from api.routes.auth import router as auth_router
 from api.routes.users import router as users_router
 from api.routes.jira_auth import router as jira_auth_router
 from api.routes.dev import router as dev_router
+from api.routes.agents import router as agents_router
 
 # Configure logging
 logging.basicConfig(
@@ -71,6 +73,7 @@ app.include_router(users_router, prefix="/api")
 app.include_router(ideas_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(dev_router, prefix="/api")
+app.include_router(agents_router, prefix="/api")
 
 
 @app.get("/")

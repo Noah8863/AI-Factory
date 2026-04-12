@@ -109,7 +109,10 @@ export default function Profile() {
   const handleConnectJira = () => {
     const token = localStorage.getItem('aif_token')
     const base = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
-    if (token) window.location.href = `${base}/api/auth/jira/login?token=${token}`
+    if (token) {
+      localStorage.setItem('aif_jira_return_to', window.location.pathname)
+      window.location.href = `${base}/api/auth/jira/login?token=${token}`
+    }
   }
 
   const initials = (displayName || user?.username || 'U')[0].toUpperCase()
