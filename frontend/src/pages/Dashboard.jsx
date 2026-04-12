@@ -9,13 +9,6 @@ import './Dashboard.scss'
 const JIRA_REQUIRED_MESSAGE = 'Please connect your Jira account before making a project.'
 const JIRA_PROJECT_REQUIRED_MESSAGE = 'Please select a target Jira project on your Profile page before starting a chat.'
 
-const TEMPLATES = [
-  { label: 'Web App',       icon: 'language',     text: 'Build a web application that ' },
-  { label: 'REST API',      icon: 'api',          text: 'Create a REST API that ' },
-  { label: 'Dashboard',     icon: 'dashboard',    text: 'Build an admin dashboard that displays ' },
-  { label: 'CLI Tool',      icon: 'terminal',     text: 'Create a command-line tool that ' },
-  { label: 'Data Pipeline', icon: 'account_tree', text: 'Build a data pipeline that ingests, processes, and outputs ' },
-]
 
 function getIdeaPill(idea, ideaTicketsMap) {
   const data = ideaTicketsMap[idea.id]
@@ -199,11 +192,6 @@ export default function Dashboard() {
     }, 800)
     return () => clearTimeout(saveTimer.current)
   }, [text])
-
-  const handleTemplate = (tpl) => {
-    setText(tpl.text)
-    textareaRef.current?.focus()
-  }
 
   // ── Submit idea → open conversation ──────────────────────────
   const handleSubmit = async () => {
@@ -633,26 +621,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            <div className="templates">
-              <p className="templates__label">
-                <span className="material-icons">bolt</span>
-                Quick start
-              </p>
-              <div className="templates__chips">
-                {TEMPLATES.map((t) => (
-                  <button
-                    key={t.label}
-                    className="template-chip"
-                    onClick={() => handleTemplate(t)}
-                    disabled={jiraStatus !== 'connected' || !jiraProjectSelected}
-                  >
-                    <span className="material-icons">{t.icon}</span>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="idea-input">
               <textarea
                 ref={textareaRef}
@@ -660,6 +628,14 @@ export default function Dashboard() {
                 placeholder="e.g. Build a SaaS app where users can upload CSV files, visualize the data in charts, and share dashboards with their team via link…"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    if (!submitting && text.trim() && jiraStatus === 'connected' && jiraProjectSelected && charCount <= MAX_CHARS) {
+                      handleSubmit()
+                    }
+                  }
+                }}
                 maxLength={MAX_CHARS}
                 spellCheck
                 disabled={jiraStatus !== 'connected' || !jiraProjectSelected}
