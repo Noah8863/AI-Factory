@@ -111,7 +111,16 @@ export default function Dashboard() {
     }
   }, [])
 
-  // ── Fetch ticket status on demand (no polling) ──────────────
+  // ── Poll active conversation tickets every 5 s while dev is running ──
+  const convPollRef = useRef(null)
+  useEffect(() => {
+    clearInterval(convPollRef.current)
+    if (!devInProcess || !conversation?.id) return
+    convPollRef.current = setInterval(() => fetchTickets(conversation.id), 5000)
+    return () => clearInterval(convPollRef.current)
+  }, [devInProcess, conversation?.id, fetchTickets])
+
+  // ── Fetch ticket status on demand ───────────────────────────
   const fetchTickets = useCallback(async (convId) => {
     if (!convId) return
     try {
