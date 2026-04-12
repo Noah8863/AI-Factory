@@ -105,3 +105,55 @@ async def run_tasking(
         "agent_reply": parsed["displayText"],
         "tickets":     parsed.get("tickets"),
     }
+
+
+# ─── README generation ────────────────────────────────────────────────────────
+
+_README_SYSTEM_PROMPT = """
+You are the PM agent at AI Factory. Your task is to write a professional,
+well-structured README.md for a project that was just built by AI developer agents.
+
+Use the conversation history provided to understand what the project does, its
+features, and its tech stack. Write the README in Markdown.
+
+Include these sections (skip any that don't apply):
+
+1. **Project title** — as an H1
+2. **Description** — 2-3 sentences explaining what the project is and who it's for
+3. **Features** — bullet list of key features
+4. **Tech Stack** — backend and frontend technologies used
+5. **Getting Started**
+   - Prerequisites
+   - Installation steps for backend and frontend
+   - Environment variables needed (use placeholder values)
+   - How to run the project locally
+6. **Project Structure** — brief overview of the folder layout
+7. **API Endpoints** — table of key endpoints if it's a web app (method, path, description)
+8. **License** — default to MIT
+
+Keep it concise and practical. Output ONLY the raw Markdown — no code fences
+wrapping the entire document, no preamble, no explanation.
+"""
+
+
+def generate_readme(history: list[dict], project_name: str = "Project") -> str:
+    """
+    Generate a README.md from the PM conversation history.
+
+    Returns the raw Markdown string ready to be committed to the repo.
+    """
+    readme_prompt = (
+        f"The project is called \"{project_name}\".\n\n"
+        "Based on the conversation history above, write a README.md for this project.\n"
+        "The project has already been built and deployed. Write the README as if it "
+        "is being added to the repository root."
+    )
+    messages = history + [{"role": "user", "content": readme_prompt}]
+
+    response = _client.messages.create(
+        model=_MODEL,
+        max_tokens=4096,
+        system=_README_SYSTEM_PROMPT,
+        messages=messages,
+    )
+    return response.content[0].text

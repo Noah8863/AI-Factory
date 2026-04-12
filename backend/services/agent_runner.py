@@ -364,11 +364,75 @@ async def run_all_tickets(
 
     all_tickets   = db.query(Ticket).filter(Ticket.conversation_id == conversation_id).all()
     still_pending = sum(1 for t in all_tickets if t.status in ("pending", "in_progress"))
+    all_failed    = sum(1 for t in all_tickets if t.status == "failed")
 
     logger.info(
         "run_all_tickets for conversation %s complete — done=%d failed=%d still_pending=%d",
         conversation_id, done_count, fail_count, still_pending,
     )
+
+    # ── Post-completion: CI/CD + README (only when every ticket is done) ─────
+    if still_pending == 0 and all_failed == 0 and conversation.github_repo_name:
+        from services.github_service import deploy_ci_workflow, write_file_to_repo
+
+        repo = conversation.github_repo_name
+
+        # 1. Deploy GitHub Actions CI/CD workflow
+        logger.info(
+            "All tickets done for conversation %s — deploying CI/CD workflow to %s.",
+            conversation_id, repo,
+        )
+        try:
+            ok = deploy_ci_workflow(repo)
+            if ok:
+                logger.info("CI/CD workflow deployed to %s.", repo)
+            else:
+                logger.warning(
+                    "deploy_ci_workflow returned False for %s.", repo,
+                )
+        except Exception as exc:
+            logger.exception(
+                "Failed to deploy CI/CD workflow for %s: %s", repo, exc,
+            )
+
+        # 2. Generate and commit a README.md from the chat history
+        try:
+            from models.message import Message
+            from services.pm_agent import generate_readme
+
+            msgs = (
+                db.query(Message)
+                .filter(Message.conversation_id == conversation_id)
+                .order_by(Message.created_at.asc())
+                .all()
+            )
+            history = [
+                {"role": "user" if m.role == "user" else "assistant", "content": m.content}
+                for m in msgs
+            ]
+
+            # Derive a human-friendly project name from the repo slug
+            project_name = repo.replace("-", " ").title()
+
+            logger.info("Generating README.md for %s …", repo)
+            readme_md = generate_readme(history, project_name=project_name)
+
+            ok = write_file_to_repo(
+                repo_name=repo,
+                file_path="README.md",
+                content=readme_md,
+                branch="main",
+                commit_message="AI Agent: add project README.md",
+            )
+            if ok:
+                logger.info("README.md committed to %s.", repo)
+            else:
+                logger.warning("Failed to write README.md to %s.", repo)
+        except Exception as exc:
+            logger.exception(
+                "Failed to generate/commit README.md for %s: %s", repo, exc,
+            )
+
     return {
         "done":          done_count,
         "failed":        fail_count,
