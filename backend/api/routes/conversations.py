@@ -22,6 +22,7 @@ from services import pm_agent
 from services.agent_runner import store_tickets, run_all_tickets_bg
 from services.github_service import create_org_repo
 from services.jira_service import create_jira_project, push_tickets_to_jira, JiraServiceError
+from models.ticket import Ticket
 from models.user import User
 from services.auth_service import SECRET_KEY, ALGORITHM, get_current_user
 
