@@ -89,7 +89,6 @@ export default function ChatThread({
   taskingResult,
   isTaskingLoading,
   repoUrl,
-  hasBeenTasked,
   devInProcess,
   agentRunError,
   agentTickets,
@@ -378,18 +377,6 @@ export default function ChatThread({
               <span className="material-icons">send</span>
             </button>
           </div>
-          {hasBeenTasked && (
-            <div className="chat-thread__retask-bar">
-              <button
-                className="chat-thread__retask-btn"
-                onClick={onStartTasking}
-                disabled={isJiraBlocked}
-              >
-                <span className="material-icons">rocket_launch</span>
-                Start Building
-              </button>
-            </div>
-          )}
         </>
       )}
 

@@ -85,11 +85,28 @@ def store_tickets(
         if "key" in r and "title" in r
     }
 
+    # Collect existing ticket_ids for this conversation to prevent duplicate rows
+    # (defense-in-depth: the "tasking" early-lock in start_tasking normally
+    # prevents concurrent calls, but this guard makes store_tickets idempotent).
+    existing_ids: set[str] = {
+        t.ticket_id
+        for t in db.query(Ticket.ticket_id)
+        .filter(Ticket.conversation_id == conversation_id)
+        .all()
+    }
+
     rows: list[Ticket] = []
     for t in ticket_list:
+        tid = t.get("id", "")
+        if tid and tid in existing_ids:
+            logger.warning(
+                "store_tickets: skipping duplicate ticket %r for conversation %s.",
+                tid, conversation_id,
+            )
+            continue
         row = Ticket(
             conversation_id=conversation_id,
-            ticket_id=t.get("id", ""),
+            ticket_id=tid,
             jira_issue_key=title_to_jira_key.get(t.get("title", "")),
             type=t.get("type", "backend"),
             phase=t.get("phase"),

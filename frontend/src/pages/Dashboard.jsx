@@ -343,6 +343,10 @@ export default function Dashboard() {
     setDevInProcess(false)
     setAgentRunError('')
     setAgentTickets([])
+    // Optimistically mark the conversation as "tasking" in local state so that
+    // if the user navigates away via the sidebar and comes back (React state
+    // preserved), the ready banner will not re-appear mid-call.
+    setConversation(prev => prev ? { ...prev, status: 'tasking' } : prev)
     try {
       const res = await startTasking(conversation.id)
       const { conversation: conv, messages: msgs, jira_tickets_created, jira_error } = res.data
@@ -725,7 +729,6 @@ export default function Dashboard() {
             taskingResult={taskingResult}
             isTaskingLoading={isTaskingLoading}
             repoUrl={conversation.github_repo_url ?? null}
-            hasBeenTasked={!!conversation.jira_project_key}
             devInProcess={devInProcess}
             agentRunError={agentRunError}
             agentTickets={agentTickets}

@@ -231,6 +231,18 @@ async def start_tasking(
 
     user_id = current_user.id
 
+    # ── Lock the conversation immediately to prevent duplicate calls ─────────────
+    # The LLM call below can take 10–30 s.  If the user navigates away and back
+    # during that window the frontend re-fetches the conversation and — if status
+    # is still "ready_to_task" — re-shows the "Start Building" banner.  A second
+    # click would race the first call and create duplicate Jira tickets / DB rows.
+    # Committing status = "tasking" NOW (before the LLM) means the re-fetch will
+    # see "tasking" and the guard above will reject any concurrent re-entry.
+    # If the LLM call fails we revert the status so the user can retry.
+    prev_status = conversation.status
+    conversation.status = "tasking"
+    db.commit()
+
     # ── Load all messages, then slice to post-checkpoint window ──
     # On a re-tasking run the user has already had one round of ticket generation.
     # We find the last "ACTION: Start tasking" trigger in the stored messages and
@@ -258,7 +270,13 @@ async def start_tasking(
     llm_history = _build_llm_history(checkpoint_messages)
 
     # ── Call PM agent — generates ticket JSON ────────────────────
-    result = await pm_agent.run_tasking(history=llm_history)
+    try:
+        result = await pm_agent.run_tasking(history=llm_history)
+    except Exception:
+        # Revert so the user can retry rather than getting stuck in "tasking"
+        conversation.status = prev_status
+        db.commit()
+        raise
 
     tickets_data = result.get("tickets") or {}
 
@@ -433,8 +451,7 @@ async def start_tasking(
         content=TASKING_COMPLETE_AGENT_MESSAGE,
     ))
 
-    # ── Transition conversation status ────────────────────────────
-    conversation.status = "tasking"
+    # status was already set to "tasking" at the top of this function
     db.commit()
     db.refresh(conversation)
 

@@ -386,12 +386,19 @@
   flex-shrink: 0;
   flex-wrap: wrap;
   animation: fadeUp 0.3s $ease-out both;
+  min-width: 0;
+  overflow: hidden;
 
   @media (max-width: 640px) {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
     padding: 14px 16px;
+  }
+
+  @media (max-width: 400px) {
+    padding: 12px 14px;
+    gap: 10px;
   }
 
   &__icon {
@@ -420,6 +427,8 @@
     font-size: 0.8125rem;
     color: $text-secondary;
     line-height: 1.5;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   &__actions {
@@ -427,6 +436,7 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
 
     @media (max-width: 640px) { flex-direction: column; }
   }
@@ -567,6 +577,7 @@
   border-bottom: 1px solid rgba($indigo, 0.22);
   background: linear-gradient(180deg, rgba($indigo, 0.08) 0%, rgba($violet, 0.04) 100%);
   animation: fadeUp 0.3s $ease-out both;
+  overflow: hidden;
 
   &__header {
     display: flex;
@@ -752,6 +763,7 @@
     padding: 0 16px 10px;
     max-height: 200px;
     overflow-y: auto;
+    overflow-x: hidden;
   }
 
   &__ticket {
@@ -760,6 +772,7 @@
     padding: 5px 6px;
     border-radius: $radius-sm;
     font-size: 0.75rem;
+    min-width: 0;
 
     &--active {
       background: rgba($indigo, 0.08);
@@ -775,6 +788,7 @@
     align-items: center;
     gap: 8px;
     width: 100%;
+    min-width: 0;
   }
 
   &__ticket-icon {
@@ -1145,52 +1159,6 @@
   }
 }
 
-// ─── Persistent "Start Building" bar (re-tasking) ────────────────────────────
-
-.chat-thread__retask-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 20px 14px;
-  background: $bg-surface;
-  flex-shrink: 0;
-}
-
-.chat-thread__retask-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  font-family: inherit;
-  color: #fff;
-  background: $gradient-brand;
-  border: none;
-  border-radius: $radius-full;
-  cursor: pointer;
-  box-shadow: 0 0 18px rgba($indigo, 0.3);
-  transition: $transition;
-
-  .material-icons { font-size: 1rem; }
-
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 0 28px rgba($indigo, 0.5);
-  }
-
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-    box-shadow: none;
-    transform: none;
-  }
-
-  @media (max-width: 480px) {
-    width: 100%;
-    justify-content: center;
-  }
-}
 
 @keyframes spin { to { transform: rotate(360deg); } }
 

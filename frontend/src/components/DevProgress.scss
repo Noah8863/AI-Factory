@@ -30,6 +30,7 @@
   border-bottom: 1px solid rgba($indigo, 0.22);
   background: linear-gradient(180deg, rgba($indigo, 0.08) 0%, rgba($violet, 0.04) 100%);
   animation: fadeUp 0.3s $ease-out both;
+  overflow: hidden;
 
   &__header {
     display: flex;
@@ -243,6 +244,7 @@
     padding: 0 16px 10px;
     max-height: 200px;
     overflow-y: auto;
+    overflow-x: hidden;
   }
 
   &__ticket {
@@ -251,6 +253,7 @@
     padding: 5px 6px;
     border-radius: $radius-sm;
     font-size: 0.75rem;
+    min-width: 0;
 
     &--active {
       background: rgba($indigo, 0.08);
@@ -266,6 +269,7 @@
     align-items: center;
     gap: 8px;
     width: 100%;
+    min-width: 0;
   }
 
   &__ticket-icon {
