@@ -17,10 +17,19 @@ const TEMPLATES = [
   { label: 'Data Pipeline', icon: 'account_tree', text: 'Build a data pipeline that ingests, processes, and outputs ' },
 ]
 
-const STATUS_META = {
-  pending:    { label: 'Pending',    icon: 'schedule',     color: 'amber'   },
-  processing: { label: 'Processing', icon: 'sync',         color: 'sky'     },
-  completed:  { label: 'Completed',  icon: 'check_circle', color: 'emerald' },
+function getIdeaPill(idea, ideaTicketsMap) {
+  const data = ideaTicketsMap[idea.id]
+  if (!data || data.tickets.length === 0) {
+    return { label: 'Requirements in Need', icon: null, color: 'rose' }
+  }
+  const hasFailed = data.tickets.some(t => t.status === 'failed')
+  if (hasFailed) {
+    return { label: 'Failed!', icon: 'cancel', color: 'rose' }
+  }
+  if (data.stillPending > 0) {
+    return { label: 'Programming', icon: 'hardware', color: 'sky' }
+  }
+  return { label: 'Completed!', icon: 'check_circle', color: 'emerald' }
 }
 
 const DRAFT_KEY = 'aif_draft'
@@ -758,14 +767,14 @@ export default function Dashboard() {
             ) : (
               <div className="ideas-list">
                 {ideas.map((idea) => {
-                  const meta = STATUS_META[idea.status] ?? STATUS_META.pending
+                  const pill = getIdeaPill(idea, ideaTicketsMap)
                   const isLoading = openingIdeaId === idea.id
                   return (
                     <div key={idea.id} className="idea-card">
                       <div className="idea-card__top">
-                        <span className={`idea-card__status idea-card__status--${meta.color}`}>
-                          <span className="material-icons">{meta.icon}</span>
-                          {meta.label}
+                        <span className={`idea-card__status idea-card__status--${pill.color}`}>
+                          {pill.icon && <span className="material-icons">{pill.icon}</span>}
+                          {pill.label}
                         </span>
                         <div className="idea-card__meta-right">
                           <span className="idea-card__id">#{idea.id}</span>

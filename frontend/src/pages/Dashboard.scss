@@ -751,14 +751,18 @@
       background: rgba($sky, 0.1);
       color: $sky;
       border: 1px solid rgba($sky, 0.25);
-
-      .material-icons { animation: spin 1.2s linear infinite; }
     }
 
     &--emerald {
       background: rgba($emerald, 0.1);
       color: $emerald;
       border: 1px solid rgba($emerald, 0.25);
+    }
+
+    &--rose {
+      background: rgba($rose, 0.1);
+      color: $rose;
+      border: 1px solid rgba($rose, 0.25);
     }
   }
 

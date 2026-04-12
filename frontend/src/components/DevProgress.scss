@@ -38,6 +38,34 @@
     padding: 10px 20px 6px;
   }
 
+  &__header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  &__collapse {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: $radius-sm;
+    background: rgba($indigo, 0.08);
+    color: $indigo;
+    cursor: pointer;
+    transition: $transition;
+    flex-shrink: 0;
+
+    .material-icons { font-size: 16px; }
+
+    &:hover {
+      background: rgba($indigo, 0.18);
+    }
+  }
+
   &__title-row {
     display: flex;
     align-items: center;
@@ -355,6 +383,10 @@
 
     .dev-progress__header {
       padding: 8px 14px 4px;
+    }
+
+    .dev-progress__header-right {
+      gap: 4px;
     }
 
     .dev-progress__bar-track {

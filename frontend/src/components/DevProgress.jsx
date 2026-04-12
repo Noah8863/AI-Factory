@@ -9,6 +9,7 @@ export default function DevProgress({
   compact = false,
 }) {
   const [expandedErrors, setExpandedErrors] = useState({})
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   if (!devInProcess && agentTickets.length === 0) return null
 
@@ -34,44 +35,59 @@ export default function DevProgress({
             </>
           )}
         </div>
-        {agentTickets.length > 0 && (
-          <p className="dev-progress__counts">
-            {doneCount}/{agentTickets.length} tickets done
-            {onRefreshTickets && (
-              <button className="dev-progress__refresh" onClick={onRefreshTickets} title="Refresh ticket status">
-                <span className="material-icons">refresh</span>
-              </button>
-            )}
-          </p>
-        )}
+        <div className="dev-progress__header-right">
+          {agentTickets.length > 0 && (
+            <p className="dev-progress__counts">
+              {doneCount}/{agentTickets.length} tickets done
+              {onRefreshTickets && (
+                <button className="dev-progress__refresh" onClick={onRefreshTickets} title="Refresh ticket status">
+                  <span className="material-icons">refresh</span>
+                </button>
+              )}
+            </p>
+          )}
+          {!compact && (
+            <button
+              className="dev-progress__collapse"
+              onClick={() => setIsCollapsed(c => !c)}
+              title={isCollapsed ? 'Expand ticket list' : 'Collapse ticket list'}
+            >
+              <span className="material-icons">
+                {isCollapsed ? 'expand_more' : 'expand_less'}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
-      {agentTickets.length > 0 && (
-        <div className="dev-progress__bar-track">
-          <div
-            className="dev-progress__bar-fill"
-            style={{
-              width: `${(doneCount / agentTickets.length) * 100}%`,
-            }}
-          />
-        </div>
-      )}
-      {/* Skeleton while tickets haven't loaded yet */}
-      {devInProcess && agentTickets.length === 0 && (
-        <div className="dev-progress__skeleton">
-          <div className="dev-progress__skeleton-bar" />
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="dev-progress__skeleton-row">
-              <div className="dev-progress__skeleton-circle" />
-              <div className="dev-progress__skeleton-id" />
-              <div className="dev-progress__skeleton-title" />
-              <div className="dev-progress__skeleton-badge" />
+      {!isCollapsed && (
+        <>
+          {agentTickets.length > 0 && (
+            <div className="dev-progress__bar-track">
+              <div
+                className="dev-progress__bar-fill"
+                style={{
+                  width: `${(doneCount / agentTickets.length) * 100}%`,
+                }}
+              />
             </div>
-          ))}
-        </div>
-      )}
-      {agentTickets.length > 0 && (
-        <ul className="dev-progress__list">
-          {agentTickets.map(ticket => {
+          )}
+          {/* Skeleton while tickets haven't loaded yet */}
+          {devInProcess && agentTickets.length === 0 && (
+            <div className="dev-progress__skeleton">
+              <div className="dev-progress__skeleton-bar" />
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="dev-progress__skeleton-row">
+                  <div className="dev-progress__skeleton-circle" />
+                  <div className="dev-progress__skeleton-id" />
+                  <div className="dev-progress__skeleton-title" />
+                  <div className="dev-progress__skeleton-badge" />
+                </div>
+              ))}
+            </div>
+          )}
+          {agentTickets.length > 0 && (
+            <ul className="dev-progress__list">
+              {agentTickets.map(ticket => {
             const statusIcon =
               ticket.status === 'done'        ? 'check_circle' :
               ticket.status === 'in_progress' ? 'sync' :
@@ -129,7 +145,9 @@ export default function DevProgress({
               </li>
             )
           })}
-        </ul>
+            </ul>
+          )}
+        </>
       )}
     </div>
   )
