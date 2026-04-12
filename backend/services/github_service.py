@@ -352,13 +352,52 @@ jobs:
 """
 
 
+def enable_github_pages(repo_name: str) -> bool:
+    """
+    Enable GitHub Pages on the repo using GitHub Actions as the build source.
+
+    Must be called before deploy-pages@v4 will succeed.  Safe to call on a
+    repo where Pages is already enabled — the API returns 409 in that case
+    and we treat it as success.
+
+    Returns True if Pages is enabled (or was already enabled), False on error.
+    """
+    token    = os.getenv("GITHUB_TOKEN")
+    org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
+    url      = f"https://api.github.com/repos/{org_name}/{repo_name}/pages"
+    headers  = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    resp = requests.post(url, headers=headers, json={"build_type": "workflow"})
+
+    if resp.status_code in (201, 409):
+        # 201 = newly enabled, 409 = already enabled — both are fine
+        print(f"✅ GitHub Pages enabled (Actions source) for {org_name}/{repo_name}")
+        return True
+
+    print(
+        f"❌ Failed to enable GitHub Pages for {repo_name}: "
+        f"{resp.status_code} {resp.text[:200]}"
+    )
+    return False
+
+
 def deploy_ci_workflow(repo_name: str) -> bool:
     """
-    Write a GitHub Actions CI/CD workflow into the repo on the main branch.
+    Enable GitHub Pages, then write the GitHub Actions CI/CD workflow into
+    the repo on the main branch.
 
     Should only be called after ALL tickets are done (no pending / failed).
-    Returns True on success, False on failure.
+    Returns True only if both steps succeed.
     """
+    # Enable Pages first — deploy-pages@v4 returns 404 if this isn't done
+    pages_ok = enable_github_pages(repo_name)
+    if not pages_ok:
+        print(f"⚠️  Continuing despite Pages-enable failure for {repo_name}.")
+
     return write_file_to_repo(
         repo_name=repo_name,
         file_path=".github/workflows/ci.yml",

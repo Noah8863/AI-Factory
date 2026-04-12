@@ -1245,6 +1245,43 @@
 }
 
 
+// ── Stop agents bar ───────────────────────────────────────────────────────────
+
+.chat-thread__stop-bar {
+  display: flex;
+  justify-content: center;
+  padding: 6px 20px 8px;
+  border-bottom: 1px solid rgba($rose, 0.15);
+  background: rgba($rose, 0.03);
+}
+
+.chat-thread__stop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 16px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: $rose;
+  background: rgba($rose, 0.08);
+  border: 1px solid rgba($rose, 0.25);
+  border-radius: $radius-full;
+  cursor: pointer;
+  transition: $transition;
+
+  .material-icons { font-size: 16px; }
+
+  &:hover {
+    background: rgba($rose, 0.15);
+    border-color: rgba($rose, 0.45);
+  }
+
+  &:active {
+    background: rgba($rose, 0.22);
+  }
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

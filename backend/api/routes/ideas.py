@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from db.database import get_db
@@ -96,11 +98,20 @@ def delete_idea(
     if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
 
-    # Delete tickets → messages → conversations → idea (respect FK order)
+    # Signal any running background agent tasks to stop before we delete rows.
+    # The agent pipeline checks conversation.cancelled at the start of each wave
+    # and before writing results back, so this prevents writes to deleted rows.
     conv_ids = [
         c.id for c in db.query(Conversation.id).filter(Conversation.idea_id == idea_id).all()
     ]
     if conv_ids:
+        db.query(Conversation).filter(Conversation.idea_id == idea_id).update(
+            {"cancelled": True, "updated_at": datetime.utcnow()},
+            synchronize_session=False,
+        )
+        db.commit()
+
+        # Delete tickets → messages → conversations → idea (respect FK order)
         db.query(Ticket).filter(Ticket.conversation_id.in_(conv_ids)).delete(synchronize_session=False)
         db.query(Message).filter(Message.conversation_id.in_(conv_ids)).delete(synchronize_session=False)
         db.query(Conversation).filter(Conversation.idea_id == idea_id).delete(synchronize_session=False)

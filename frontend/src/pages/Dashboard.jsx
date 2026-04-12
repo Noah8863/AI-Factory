@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking, getAgentTickets, getIdeaTickets, retryTicket } from '../utils/api'
+import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking, getAgentTickets, getIdeaTickets, retryTicket, cancelAgents } from '../utils/api'
 import ChatThread from '../components/ChatThread'
 import DevProgress from '../components/DevProgress'
 import Navbar from '../components/Navbar'
@@ -348,6 +348,18 @@ export default function Dashboard() {
   }
 
   const handleRefreshTickets = () => conversation && fetchTickets(conversation.id)
+
+  // ── Stop running agents ───────────────────────────────────────
+  const handleCancelAgents = async () => {
+    if (!conversation) return
+    try {
+      await cancelAgents(conversation.id)
+      setDevInProcess(false)
+      await fetchTickets(conversation.id)
+    } catch {
+      // non-fatal — UI will reflect updated ticket statuses on next poll
+    }
+  }
 
   const handleContinueChat = () => setShowReadyBanner(false)
   const handleBackFromChat  = () => { setActiveNav('new'); setTaskingResult(null) }
@@ -714,6 +726,7 @@ export default function Dashboard() {
             onAddMoreRequirements={handleAddMoreRequirements}
             onRetryTicket={handleRetryTicket}
             onRefreshTickets={handleRefreshTickets}
+            onCancelAgents={handleCancelAgents}
             onGoToProfile={() => navigate('/profile')}
             onBack={handleBackFromChat}
           />

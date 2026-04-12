@@ -83,4 +83,8 @@ export const getAgentTickets = (conversationId) =>
 export const retryTicket = (conversationId, ticketDbId) =>
   api.post(`/agents/${conversationId}/tickets/${ticketDbId}/retry`)
 
+/** Signal all running agents for a conversation to stop. */
+export const cancelAgents = (conversationId) =>
+  api.post(`/agents/${conversationId}/cancel`)
+
 export default api

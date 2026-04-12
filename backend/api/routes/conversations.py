@@ -399,11 +399,23 @@ async def start_tasking(
             db.commit()
 
         # ── 6. Auto-start dev agents in the background ──────────────
-        background_tasks.add_task(run_all_tickets_bg, conversation_id, user_id)
-        logger.info(
-            "Dev agents queued in background for conversation %s.",
-            conversation_id,
+        # Guard: only queue a runner if none is already active.
+        already_running = (
+            db.query(Ticket)
+            .filter(Ticket.conversation_id == conversation_id, Ticket.status == "in_progress")
+            .first()
         )
+        if not already_running:
+            background_tasks.add_task(run_all_tickets_bg, conversation_id, user_id)
+            logger.info(
+                "Dev agents queued in background for conversation %s.",
+                conversation_id,
+            )
+        else:
+            logger.info(
+                "Skipping auto-launch for conversation %s — agents already running.",
+                conversation_id,
+            )
 
     # ── Persist the trigger message + friendly agent confirmation ───
     # The raw LLM reply (result["agent_reply"]) is the JSON dump used to

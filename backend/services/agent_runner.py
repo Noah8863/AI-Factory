@@ -181,6 +181,18 @@ async def run_ticket(
         logger.error("run_ticket: ticket DB id %s not found.", ticket_db_id)
         return False
 
+    # ── Cancellation check (before doing any work) ────────────────────────────
+    db.refresh(conversation)
+    if conversation.cancelled:
+        logger.info(
+            "Ticket %s skipped — conversation %s was cancelled.",
+            ticket.ticket_id, conversation.id,
+        )
+        ticket.status     = "cancelled"
+        ticket.updated_at = datetime.utcnow()
+        db.commit()
+        return False
+
     logger.info(
         "Running ticket %s (%s) seq=%s — %s",
         ticket.ticket_id, ticket.type, ticket.sequence, ticket.title,
@@ -188,10 +200,23 @@ async def run_ticket(
 
     from models.jira_token import JiraToken
 
-    # ── Mark in-progress ──────────────────────────────────────────────────────
-    ticket.status     = "in_progress"
-    ticket.updated_at = datetime.utcnow()
+    # ── Atomically claim the ticket ───────────────────────────────────────────
+    # Two concurrent background tasks can both see the same ticket as 'pending'.
+    # Using UPDATE WHERE status='pending' ensures only ONE task can claim it —
+    # the other will get 0 rows_affected and skip it cleanly.
+    rows_claimed = (
+        db.query(Ticket)
+        .filter(Ticket.id == ticket_db_id, Ticket.status == "pending")
+        .update({"status": "in_progress", "updated_at": datetime.utcnow()}, synchronize_session=False)
+    )
     db.commit()
+    if rows_claimed == 0:
+        logger.warning(
+            "Ticket %s (db_id=%s) already claimed by another runner — skipping.",
+            ticket.ticket_id, ticket_db_id,
+        )
+        return False
+    db.refresh(ticket)  # reload after the atomic update
 
     # Resolve Jira cloud_id once — used for status transitions (best-effort)
     cloud_id: str | None = None
@@ -244,6 +269,20 @@ async def run_ticket(
                 ticket_prompt=ticket_prompt,
                 repo_name=repo_name,
             )
+
+        # ── Post-agent cancellation check ─────────────────────────────────────
+        # Cancellation may have been requested while the LLM was running.
+        # Re-fetch the conversation to get the latest flag value.
+        db.refresh(conversation)
+        if conversation.cancelled:
+            logger.info(
+                "Ticket %s agent completed but conversation %s was cancelled — discarding results.",
+                ticket.ticket_id, conversation.id,
+            )
+            ticket.status     = "cancelled"
+            ticket.updated_at = datetime.utcnow()
+            db.commit()
+            return False
 
         # Check for partial failures (files that failed to write to GitHub)
         file_errors = result.get("file_errors", [])
@@ -328,6 +367,14 @@ async def run_all_tickets(
     max_rounds  = 50   # prevents infinite loops if deps are cyclic
 
     for _ in range(max_rounds):
+        # Re-fetch the conversation each wave so we always see the latest cancelled flag
+        db.refresh(conversation)
+        if conversation.cancelled:
+            logger.info(
+                "Agent pipeline halted — conversation %s was cancelled.", conversation_id
+            )
+            break
+
         runnable = get_runnable_tickets(conversation_id, None, db)
         if not runnable:
             break

@@ -15,6 +15,7 @@ Routes for triggering and monitoring AI developer agent work.
 """
 
 import logging
+from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -35,7 +36,7 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 # ── Helper ────────────────────────────────────────────────────────────────────
 
 def _ticket_counts(tickets: list[Ticket]) -> dict:
-    done    = sum(1 for t in tickets if t.status == "done")
+    done    = sum(1 for t in tickets if t.status in ("done", "cancelled"))
     failed  = sum(1 for t in tickets if t.status == "failed")
     pending = sum(1 for t in tickets if t.status in ("pending", "in_progress"))
     return {"done": done, "failed": failed, "still_pending": pending}
@@ -88,6 +89,25 @@ async def run_agents(
             ),
         )
 
+    # Guard: if any ticket is already in_progress, a runner is already active.
+    # Queuing a second one would cause duplicate commits for the same ticket.
+    already_running = (
+        db.query(Ticket)
+        .filter(Ticket.conversation_id == conversation_id, Ticket.status == "in_progress")
+        .first()
+    )
+    if already_running:
+        logger.info(
+            "Skipping duplicate agent launch for conversation %s — already running.",
+            conversation_id,
+        )
+        counts = _ticket_counts(tickets)
+        return AgentRunResponse(
+            conversation_id=conversation_id,
+            tickets=[TicketRead.model_validate(t) for t in tickets],
+            **counts,
+        )
+
     background_tasks.add_task(run_all_tickets_bg, conversation_id, current_user.id)
     logger.info(
         "Agent run queued for conversation %s by user %s (%d runnable now).",
@@ -120,6 +140,49 @@ def get_ticket_status(
         tickets=[TicketRead.model_validate(t) for t in tickets],
         **counts,
     )
+
+
+@router.post("/{conversation_id}/cancel", status_code=200)
+def cancel_agents(
+    conversation_id: int,
+    current_user:    User = Depends(get_current_user),
+    db:              Session = Depends(get_db),
+):
+    """
+    Signal any running background agent task to stop after the current ticket.
+
+    Sets conversation.cancelled = True and marks all pending tickets as
+    'cancelled' so the pipeline loop exits cleanly on its next wave check.
+    Any ticket currently being worked on by the LLM will finish its API call
+    but will not write results back to the DB.
+    """
+    conversation = db.get(Conversation, conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
+    conversation.cancelled  = True
+    conversation.updated_at = datetime.utcnow()
+
+    # Mark every pending ticket as cancelled so the UI clears immediately
+    pending_tickets = (
+        db.query(Ticket)
+        .filter(
+            Ticket.conversation_id == conversation_id,
+            Ticket.status.in_(["pending"]),
+        )
+        .all()
+    )
+    for t in pending_tickets:
+        t.status     = "cancelled"
+        t.updated_at = datetime.utcnow()
+
+    db.commit()
+
+    logger.info(
+        "Conversation %s cancelled by user %s. %d pending ticket(s) marked cancelled.",
+        conversation_id, current_user.id, len(pending_tickets),
+    )
+    return {"cancelled": True, "tickets_cancelled": len(pending_tickets)}
 
 
 @router.post("/{conversation_id}/tickets/{ticket_db_id}/retry", response_model=AgentRunResponse)

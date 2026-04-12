@@ -101,6 +101,7 @@ export default function ChatThread({
   onAddMoreRequirements,
   onRetryTicket,
   onRefreshTickets,
+  onCancelAgents,
   onGoToProfile,
   onBack,
 }) {
@@ -202,12 +203,22 @@ export default function ChatThread({
 
       {/* ── Dev agent progress panel ──────────────────────────── */}
       {!agentRunError && (
-        <DevProgress
-          devInProcess={devInProcess}
-          agentTickets={agentTickets}
-          onRefreshTickets={onRefreshTickets}
-          onRetryTicket={onRetryTicket}
-        />
+        <>
+          <DevProgress
+            devInProcess={devInProcess}
+            agentTickets={agentTickets}
+            onRefreshTickets={onRefreshTickets}
+            onRetryTicket={onRetryTicket}
+          />
+          {devInProcess && onCancelAgents && (
+            <div className="chat-thread__stop-bar">
+              <button className="chat-thread__stop-btn" onClick={onCancelAgents}>
+                <span className="material-icons">stop_circle</span>
+                Stop Agents
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* ── Agent run error banner ─────────────────────────────── */}

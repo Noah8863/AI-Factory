@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, DateTime, ForeignKey
 from db.database import Base
 
 
@@ -11,6 +11,8 @@ class Conversation(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     # Statuses: active | ready_to_task | tasking | done
     status = Column(String(32), default="active", nullable=False)
+    # Set to True to signal any running background agent task to stop
+    cancelled = Column(Boolean, default=False, nullable=False)
     # GitHub repo created when the user first clicks "Start Building"
     github_repo_name = Column(String(255), nullable=True)
     github_repo_url  = Column(String(512), nullable=True)
