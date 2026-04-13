@@ -17,6 +17,69 @@ const PROJECT_TYPES = [
   { id: 'devops',     label: 'DevOps Tool',  icon: 'build',       pmLabel: 'DevOps Tool',  color: 'amber'   },
 ]
 
+const PROJECT_TAG_KEYS = [
+  'has_frontend',
+  'has_backend',
+  'is_script',
+  'is_mobile_app',
+  'is_devops_program',
+  'is_full_stack',
+  'has_mixed_technologies',
+]
+
+function normalizeProjectTags(tags) {
+  if (!tags) return null
+
+  let parsed = tags
+  if (typeof parsed === 'string') {
+    const trimmed = parsed.trim()
+    if (!trimmed) return null
+    try {
+      parsed = JSON.parse(trimmed)
+    } catch {
+      return null
+    }
+  }
+
+  const normalized = Object.fromEntries(PROJECT_TAG_KEYS.map((k) => [k, false]))
+
+  if (Array.isArray(parsed)) {
+    for (const key of parsed) {
+      if (key in normalized) normalized[key] = true
+    }
+  } else if (typeof parsed === 'object' && parsed !== null) {
+    for (const key of PROJECT_TAG_KEYS) {
+      if (key in parsed) normalized[key] = !!parsed[key]
+    }
+  } else {
+    return null
+  }
+
+  normalized.is_full_stack = normalized.has_frontend && normalized.has_backend
+  return Object.values(normalized).some(Boolean) ? normalized : null
+}
+
+function normalizeConversation(conv) {
+  if (!conv || typeof conv !== 'object') return conv
+  return {
+    ...conv,
+    project_tags: normalizeProjectTags(conv.project_tags),
+  }
+}
+
+function parseJiraStatusPayload(payload) {
+  const connected = !!payload?.connected
+  const projectSelected = !!(
+    payload?.project_selected ??
+    payload?.jira_project_key ??
+    payload?.selected_project_key
+  )
+  return {
+    jiraStatus: connected ? 'connected' : 'disconnected',
+    jiraProjectSelected: projectSelected,
+  }
+}
+
 
 function getIdeaPill(idea, ideaTicketsMap) {
   const data = ideaTicketsMap[idea.id]
@@ -123,8 +186,9 @@ export default function Dashboard() {
     api.get('/auth/jira/status')
       .then((res) => {
         if (!cancelled) {
-          setJiraStatus(res.data.connected ? 'connected' : 'disconnected')
-          setJiraProjectSelected(!!res.data.project_selected)
+          const parsed = parseJiraStatusPayload(res.data)
+          setJiraStatus(parsed.jiraStatus)
+          setJiraProjectSelected(parsed.jiraProjectSelected)
         }
       })
       .catch(() => {
@@ -215,9 +279,10 @@ export default function Dashboard() {
         : text.trim()
       const res = await startConversation(ideaContent)
       const { conversation: conv, messages: msgs } = res.data
-      setConversation(conv)
+      const normalizedConv = normalizeConversation(conv)
+      setConversation(normalizedConv)
       setMessages(msgs)
-      setShowReadyBanner(conv.status === 'ready_to_task')
+      setShowReadyBanner(normalizedConv.status === 'ready_to_task')
       setText('')
       setSelectedProjectType(null)
       localStorage.removeItem(DRAFT_KEY)
@@ -245,13 +310,14 @@ export default function Dashboard() {
     try {
       const res = await getIdeaConversation(idea.id)
       const { conversation: conv, messages: msgs } = res.data
-      setConversation(conv)
+      const normalizedConv = normalizeConversation(conv)
+      setConversation(normalizedConv)
       setMessages(msgs)
-      setShowReadyBanner(conv.status === 'ready_to_task')
+      setShowReadyBanner(normalizedConv.status === 'ready_to_task')
       setActiveNav('chat')
 
       // Fetch current ticket status for this conversation
-      await fetchTickets(conv.id)
+      await fetchTickets(normalizedConv.id)
     } catch {
       // no conversation yet or error — nothing to open
     } finally {
@@ -314,9 +380,10 @@ export default function Dashboard() {
     try {
       const res = await sendMessage(conversation.id, content)
       const { conversation: conv, messages: msgs } = res.data
-      setConversation(conv)
+      const normalizedConv = normalizeConversation(conv)
+      setConversation(normalizedConv)
       setMessages(msgs)
-      if (conv.status === 'ready_to_task') setShowReadyBanner(true)
+      if (normalizedConv.status === 'ready_to_task') setShowReadyBanner(true)
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
       setSendError('Failed to send. Please try again.')
@@ -342,6 +409,7 @@ export default function Dashboard() {
     setDevInProcess(false)
     setAgentRunError('')
     setAgentTickets([])
+    const previousStatus = conversation.status
     // Optimistically mark the conversation as "tasking" in local state so that
     // if the user navigates away via the sidebar and comes back (React state
     // preserved), the ready banner will not re-appear mid-call.
@@ -349,15 +417,18 @@ export default function Dashboard() {
     try {
       const res = await startTasking(conversation.id)
       const { conversation: conv, messages: msgs, jira_tickets_created, jira_error } = res.data
-      setConversation(conv)
+      const normalizedConv = normalizeConversation(conv)
+      setConversation(normalizedConv)
       setMessages(msgs)
       setTaskingResult({ jira_tickets_created, jira_error })
 
       // Backend auto-triggers dev agents after storing tickets.
       // Fetch ticket state once after a short delay so the UI shows them.
       setDevInProcess(true)
-      setTimeout(() => fetchTickets(conversation.id), 3000)
+      setTimeout(() => fetchTickets(normalizedConv.id), 3000)
     } catch {
+      // Revert optimistic status if start-tasking fails.
+      setConversation(prev => prev ? { ...prev, status: previousStatus } : prev)
       setSendError('Failed to start tasking. Please try again.')
     } finally {
       setIsTaskingLoading(false)
@@ -402,7 +473,7 @@ export default function Dashboard() {
     try {
       const res = await reopenConversation(conversation.id)
       const { conversation: conv, messages: msgs } = res.data
-      setConversation(conv)
+      setConversation(normalizeConversation(conv))
       setMessages(msgs)
       setTaskingResult(null)
       setShowReadyBanner(false)
@@ -420,11 +491,12 @@ export default function Dashboard() {
     try {
       const res = await declineTasking(conversation.id)
       const { conversation: conv, messages: msgs } = res.data
-      setConversation(conv)
+      const normalizedConv = normalizeConversation(conv)
+      setConversation(normalizedConv)
       setMessages(msgs)
       // Agents are already running — fetch tickets so the progress panel populates
       setDevInProcess(true)
-      fetchTickets(conv.id)
+      fetchTickets(normalizedConv.id)
     } catch {
       setSendError('Something went wrong. Please try again.')
     }
@@ -436,7 +508,7 @@ export default function Dashboard() {
     try {
       const res = await reopenConversation(conversation.id)
       const { conversation: conv, messages: msgs } = res.data
-      setConversation(conv)
+      setConversation(normalizeConversation(conv))
       setMessages(msgs)
       setTaskingResult(null)
       setShowReadyBanner(false)
