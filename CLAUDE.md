@@ -9,23 +9,24 @@
 1. [Project Overview & Vision](#1-project-overview--vision)
 2. [Tech Stack](#2-tech-stack)
 3. [Repository Structure](#3-repository-structure)
-4. [Database Schema & ORM](#4-database-schema--orm)
-5. [Backend API Routes](#5-backend-api-routes)
-6. [Agent System — PM Agent](#6-agent-system--pm-agent)
-7. [Agent System — Developer Agents](#7-agent-system--developer-agents)
-8. [Agent Orchestration — agent_runner.py](#8-agent-orchestration--agent_runnerpy)
-9. [Chat Log Lifecycle](#9-chat-log-lifecycle)
-10. [JIRA Integration](#10-jira-integration)
-11. [GitHub Integration](#11-github-integration)
-12. [Authentication & Sessions](#12-authentication--sessions)
-13. [Frontend Architecture](#13-frontend-architecture)
-14. [End-to-End Flow Walkthrough](#14-end-to-end-flow-walkthrough)
-15. [Environment Variables](#15-environment-variables)
-16. [Build & Development Commands](#16-build--development-commands)
-17. [Deployment](#17-deployment)
-18. [Coding Conventions](#18-coding-conventions)
-19. [State Machines](#19-state-machines)
-20. [Known Limitations & Future Work](#20-known-limitations--future-work)
+4. [Project Type Tag System](#4-project-type-tag-system)
+5. [Database Schema & ORM](#5-database-schema--orm)
+6. [Backend API Routes](#6-backend-api-routes)
+7. [Agent System — PM Agent](#7-agent-system--pm-agent)
+8. [Agent System — Developer Agents](#8-agent-system--developer-agents)
+9. [Agent Orchestration — agent_runner.py](#9-agent-orchestration--agent_runnerpy)
+10. [Chat Log Lifecycle](#10-chat-log-lifecycle)
+11. [JIRA Integration](#11-jira-integration)
+12. [GitHub Integration](#12-github-integration)
+13. [Authentication & Sessions](#13-authentication--sessions)
+14. [Frontend Architecture](#14-frontend-architecture)
+15. [End-to-End Flow Walkthrough](#15-end-to-end-flow-walkthrough)
+16. [Environment Variables](#16-environment-variables)
+17. [Build & Development Commands](#17-build--development-commands)
+18. [Deployment](#18-deployment)
+19. [Coding Conventions](#19-coding-conventions)
+20. [State Machines](#20-state-machines)
+21. [Known Limitations & Future Work](#21-known-limitations--future-work)
 
 ---
 
@@ -33,21 +34,36 @@
 
 **AI Factory** is an end-to-end autonomous multi-agent system that transforms a plain-English idea into a fully scaffolded, GitHub-hosted codebase — no human developer required.
 
+### Core Philosophy
+The PM Agent is the gatekeeper between a user's raw idea and the development pipeline. It is the single source of truth for:
+- What the project is (type, scope, tech stack)
+- What needs to be built (structured Jira tickets)
+- Which agents will build it (determined by project type tags)
+
+The PM Agent must be adaptive — it should be just as capable of handling a request like "make me a simple Python script that renames files" as it is handling "build me a full-stack e-commerce platform". Scope dictates the plan; the plan dictates the tickets; the tags on the plan dictate the agents.
+
 ### User Journey (high level)
 1. User signs up and connects their Jira account via OAuth.
-2. User submits a natural-language idea (e.g., "Build me a recipe-sharing app").
-3. A **PM Agent** (LLM-powered) asks clarifying questions one at a time until it has enough context.
-4. User clicks **"Start Building"** — the PM Agent emits a structured JSON payload of Jira tickets.
-5. Tickets are pushed to Jira Cloud. A private GitHub repository is created.
-6. **Developer Agents** (Backend + Frontend) execute tickets in dependency order, writing complete files directly to the GitHub repo via the Contents API.
-7. When all tickets are done, a CI/CD workflow and auto-generated README are committed.
-8. Idea status transitions to `completed`. The user sees live links to the repo and Jira board.
+2. User submits a natural-language idea in any scope (web app, CLI script, mobile app, DevOps tool, etc.).
+3. A **PM Agent** (LLM-powered) asks clarifying questions one at a time to build a complete picture.
+4. The PM Agent produces a **developer plan** — a structured definition of the tech stack, folder structure, required tools and libraries, agent types needed, and acceptance criteria for each feature.
+5. User clicks **"Start Building"** — the PM Agent emits a structured JSON payload of Jira tickets derived from the developer plan. Ticket count scales with scope: 1 ticket for a trivial script, up to 8–15 tickets for a complex full-stack system.
+6. The PM Agent **stamps the plan** with project type tags (e.g., `has_frontend`, `is_script`) that travel through the entire pipeline.
+7. Tickets are pushed to Jira Cloud. A private GitHub repository is created.
+8. **Developer Agents** (Backend, Frontend, or both) execute tickets in dependency order based on project type tags, writing complete files directly to the GitHub repo via the Contents API.
+9. When all tickets are done, a CI/CD workflow, a README, and a `CLAUDE.md` are committed to the repo.
+10. GitHub Pages deployment is **only triggered for projects with a frontend** (`has_frontend: true`). Scripts, backend APIs, and DevOps tools skip this step entirely.
+11. Idea status transitions to `completed`. The user sees live links to the repo and Jira board.
 
 ### What makes this non-trivial
 - The PM Agent maintains a full conversation history that guides ticket generation — no context is lost between messages.
+- The PM Agent is scope-adaptive — it generates the right number of tickets for the complexity of the request, not a fixed template.
+- Project type tags flow from the PM Agent's JSON output through the DB, the orchestrator, and into every Jira ticket's label set — no tag inference at later stages.
+- Developer Agents route by ticket type (`backend` / `frontend`), which is itself derived from the PM's tags — the orchestrator never guesses what kind of code to write.
 - Developer Agents write **complete, production-intent files** (no `// TODO` placeholders) parsed from raw LLM JSON output.
 - Dependency resolution runs tickets concurrently at the same sequence level (`asyncio.gather`) and serially across levels — correctness over speed.
 - The entire pipeline is cancellable mid-run; the frontend polls for status at ~1 s intervals.
+- Post-completion artifacts committed to the generated repo: `README.md` (human-readable overview), `CLAUDE.md` (AI agent context — tech stack, algorithms, folder structure), and `ci.yml` (GitHub Actions CI/CD, frontend-conditional).
 
 ---
 
@@ -156,7 +172,63 @@ AI-Factory/
 
 ---
 
-## 4. Database Schema & ORM
+## 4. Project Type Tag System
+
+This is one of the most important design decisions in the codebase. **Tags are the single mechanism that routes work to the right agents and controls post-build behavior.** They originate in the PM Agent's JSON output and flow through every downstream system without re-derivation.
+
+### The Seven Tags
+
+All seven keys are **always present** in the `projectTags` object — never a subset. Every key is a boolean.
+
+| Tag | Meaning |
+|-----|---------|
+| `has_frontend` | Project includes a web frontend (HTML/CSS/JS, React, Vue, etc.) |
+| `has_backend` | Project includes a server-side API or backend service |
+| `is_script` | Project is a standalone script or CLI tool (no web server, no frontend) |
+| `is_mobile_app` | Project targets iOS/Android (React Native, Flutter, Expo, etc.) |
+| `is_devops_program` | Project is primarily infrastructure, CI/CD, Docker configs, or monitoring |
+| `is_full_stack` | **Derived only** — always equals `has_frontend AND has_backend`. Never set independently. |
+| `has_mixed_technologies` | Project uses more than one language/runtime paradigm (e.g., Python backend + JS frontend) |
+
+### Tag Rules (Enforced in Code)
+- `is_full_stack` is computed by `parse_agent_reply` in `backend/agents/pm_agent.py` — the LLM output is overwritten with the derived value. Do not trust the LLM's `is_full_stack` value directly.
+- Multiple tags can be true simultaneously (e.g., a DevOps project with an admin dashboard has `is_devops_program: true` AND `has_frontend: true`).
+- A pure REST API: `has_backend: true`, all others false.
+- A CLI script: `is_script: true`, all others false.
+- A full-stack web app: `has_frontend: true, has_backend: true, is_full_stack: true`, others false.
+
+### Tag Propagation Chain
+
+```
+PM Agent JSON output
+  └─→ parse_agent_reply() normalises + enforces is_full_stack rule
+        └─→ conversations.py stores to conversation.project_tags (JSON column)
+              ├─→ agent_runner.py reads tags to decide:
+              │     ├─ Which agents execute (backend tickets → BE agent, frontend → FE agent)
+              │     ├─ Whether to deploy to GitHub Pages (has_frontend only)
+              │     └─ Whether to include frontend jobs in the CI workflow
+              └─→ jira_service._create_jira_issue() stamps each ticket with:
+                    ├─ Machine-readable tag names (e.g., "has_frontend", "is_full_stack")
+                    └─ Human-readable category labels:
+                         "Website"  ← has_frontend OR is_full_stack
+                         "App"      ← is_mobile_app
+                         "Script"   ← is_script
+                         "DevOps"   ← is_devops_program
+```
+
+### Fallback Behaviour
+If `conversation.project_tags` is empty or `None` (e.g., old records before this feature was added), `agent_runner.py` falls back to inferring `has_frontend` / `has_backend` from the ticket types actually stored in the DB. All other tags default to `False`. New records always have tags set.
+
+### DB Migration Note
+The `project_tags` column is a `JSON` column on the `conversations` table. For existing databases that pre-date this column, run:
+```sql
+ALTER TABLE conversations ADD COLUMN project_tags TEXT;
+```
+This is handled defensively in `main.py` with an `ALTER TABLE` guard on startup (add if not already present).
+
+---
+
+## 5. Database Schema & ORM
 
 ### Engine & Sessions (`backend/db/database.py`)
 - `DATABASE_URL` from environment; defaults to `sqlite:///./aifactory.db`.
@@ -198,6 +270,7 @@ idea_id           Integer FK → ideas.id
 user_id           Integer FK → users.id
 status            String "active" | "ready_to_task" | "tasking" | "done"
 cancelled         Boolean default=False  ← checked by agents at runtime
+project_tags      JSON    nullable  ← the seven boolean tag keys (see §4)
 github_repo_name  String  nullable
 github_repo_url   String  nullable
 jira_project_key  String  nullable
@@ -231,7 +304,7 @@ priority        String  "High" | "Medium" | "Low"
 title           String
 description     Text    (acceptance criteria written by PM Agent)
 story_points    Integer nullable
-labels          JSON    list of strings
+labels          JSON    list of strings (includes tag names + human-readable stamps)
 status          String  "pending" | "in_progress" | "done" | "failed" | "cancelled"
 error_msg       Text    nullable  (last 5 traceback frames on failure)
 agent_output    Text    nullable  (raw JSON from agent execution)
@@ -263,7 +336,7 @@ updated_at            DateTime
 
 ---
 
-## 5. Backend API Routes
+## 6. Backend API Routes
 
 All routes are prefixed `/api`. JWT-protected routes require `Authorization: Bearer <token>`.
 
@@ -303,7 +376,7 @@ All routes are prefixed `/api`. JWT-protected routes require `Authorization: Bea
 | POST | `/conversations` | JWT | Body: `{ idea_id }`. Creates conversation, calls PM Agent for first message. Saves agent reply as `Message`. |
 | GET | `/conversations/{id}` | No | Returns full conversation with all `Message` objects. |
 | POST | `/conversations/{id}/messages` | JWT | Body: `{ content }`. Saves user message, calls PM Agent with full history, saves agent reply. Returns updated conversation. |
-| POST | `/conversations/{id}/start-tasking` | JWT | Triggers ticket generation (see §14). Returns `TaskingResult`. |
+| POST | `/conversations/{id}/start-tasking` | JWT | Triggers ticket generation (see §15). Returns `TaskingResult`. |
 | POST | `/conversations/{id}/reopen` | No | Sets status back to `"active"`. |
 | POST | `/conversations/{id}/decline-tasking` | No | Marks conversation `"done"` without executing tickets. |
 
@@ -344,18 +417,40 @@ All routes are prefixed `/api`. JWT-protected routes require `Authorization: Bea
 
 ---
 
-## 6. Agent System — PM Agent
+## 7. Agent System — PM Agent
 
 ### Location
 - **System prompt:** `backend/agents/pm_agent.py` → `PM_SYSTEM_PROMPT`
 - **I/O service:** `backend/services/pm_agent.py`
 
+### Core Responsibility: The Developer Plan
+
+The PM Agent's primary output is not just a list of tickets — it is a **complete developer plan** that fully specifies the project before any code is written. This plan includes:
+- The project type and tech stack (frontend, backend, scripting language, frameworks, libraries)
+- Required tools and external services (databases, APIs, storage, etc.)
+- Recommended folder structure
+- Any algorithms or patterns central to the implementation
+- Which types of agents will be needed (backend dev, frontend dev, or both)
+- The project type tags that classify the work
+
+The Jira tickets are derived from this plan. The plan's tags flow through the rest of the system.
+
+### Scope Adaptability
+
+The PM Agent must calibrate its output to the scope of the request:
+- **Simple request** (e.g., "make me a Python script that renames files in a folder"): Ask 1–2 quick questions, produce 1–3 tickets, set `is_script: true`.
+- **Medium request** (e.g., "build a REST API for a to-do app"): Ask 3–5 questions, produce 4–8 tickets, set `has_backend: true`.
+- **Complex request** (e.g., "build a full-stack e-commerce platform with user accounts and Stripe"): Ask 5–8 questions, produce 8–15 tickets, set `has_frontend: true, has_backend: true, is_full_stack: true`.
+
+Never generate more tickets than the scope warrants. A trivial script does not need a Foundation ticket, a Core ticket, and a Polish ticket.
+
 ### Responsibilities & Phases
 
 #### Phase 1 — Discovery (Conversation)
 The PM Agent is a conversational requirements analyst. It asks **one clarifying question at a time** in a warm, professional tone. It probes for:
+- What type of project this is (web app, CLI tool, API, mobile app, DevOps automation, etc.)
 - The target users and problem statement
-- Must-have MVP features (aim for 2–3)
+- Must-have MVP features (calibrate to scope — 1 feature for a script, 2–3 for an MVP web app)
 - Tech stack preferences (defaults: Node.js + Express + MongoDB for backend, Vanilla JS for frontend if user has no preference)
 - Definition of success / acceptance criteria
 - Explicit non-goals (what's out of scope)
@@ -371,6 +466,15 @@ Triggered when the user clicks "Start Building" (`start-tasking` route). The ser
   "projectSummary": "A web app where users...",
   "githubRepoName": "recipe-sharing-app",
   "jiraProjectKey": "RSA",
+  "projectTags": {
+    "has_frontend": true,
+    "has_backend": true,
+    "is_script": false,
+    "is_mobile_app": false,
+    "is_devops_program": false,
+    "is_full_stack": true,
+    "has_mixed_technologies": false
+  },
   "tickets": [
     {
       "id": "BE-1",
@@ -382,7 +486,7 @@ Triggered when the user clicks "Start Building" (`start-tasking` route). The ser
       "sequence": 1,
       "dependsOn": [],
       "storyPoints": 3,
-      "labels": ["backend", "foundation", "setup"]
+      "labels": ["has_frontend", "has_backend", "is_full_stack", "backend", "foundation", "setup"]
     },
     {
       "id": "FE-1",
@@ -393,11 +497,14 @@ Triggered when the user clicks "Start Building" (`start-tasking` route). The ser
       "phase": "Core",
       "sequence": 2,
       "dependsOn": ["BE-1"],
-      ...
+      "storyPoints": 2,
+      "labels": ["has_frontend", "has_backend", "is_full_stack", "frontend", "core"]
     }
   ]
 }
 ```
+
+**Critical: every ticket's `labels` array must include the name of each `projectTags` key that is `true`.** This allows every Jira ticket to be independently filtered by project type without needing to look up the conversation. The Jira service then appends human-readable stamps (`"Website"`, `"App"`, `"Script"`, `"DevOps"`) based on these machine-readable labels.
 
 **Ticket ID conventions:**
 - `BE-N` for backend tickets
@@ -424,12 +531,22 @@ max_tokens = 4096
 
 ---
 
-## 7. Agent System — Developer Agents
+## 8. Agent System — Developer Agents
 
 ### Location
 - **Backend agent system prompt:** `backend/agents/backend_agent.py` → `BACKEND_SYSTEM_PROMPT`
 - **Frontend agent system prompt:** `backend/agents/frontend_agent.py` → `FRONTEND_SYSTEM_PROMPT`
 - **I/O services:** `backend/services/backend_agent.py`, `backend/services/frontend_agent.py`
+
+### Tag-Based Agent Routing
+
+Developer agents are selected by ticket type, which is itself derived from the PM Agent's project tags:
+- Tickets with `type: "backend"` → **Backend Developer Agent**
+- Tickets with `type: "frontend"` → **Frontend Developer Agent**
+
+The orchestrator (`agent_runner.py`) never guesses or infers what kind of code to write — it reads the ticket type from the DB. The PM Agent is responsible for assigning the right ticket type when generating the plan.
+
+> **Future work:** Additional agent types (e.g., a dedicated mobile agent for `is_mobile_app` projects, a DevOps agent for `is_devops_program` projects) will be added as new agent modules with their own system prompts and routing logic. The tag system is already plumbed to support this.
 
 ### Backend Developer Agent
 
@@ -480,7 +597,7 @@ Both agents use a `parse_developer_output(raw_text)` function that:
 
 ---
 
-## 8. Agent Orchestration — `agent_runner.py`
+## 9. Agent Orchestration — `agent_runner.py`
 
 **Location:** `backend/services/agent_runner.py`
 
@@ -526,14 +643,53 @@ Tickets at the **same sequence number** run **concurrently** via `asyncio.gather
 #### `run_all_tickets_bg(conversation_id, user_id)`
 - Thin wrapper for `BackgroundTasks`.
 - Creates its own `SessionLocal()` (does **not** reuse the request-scoped session).
-- Calls `run_all_tickets`, then:
-  - If all tickets done: calls `deploy_ci_workflow(repo_name)` + `generate_readme(...)` + commits both to GitHub.
-  - Sets `idea.status = "completed"` or `"failed"`.
-  - Closes its own DB session in `finally`.
+- Calls `run_all_tickets`, then executes three post-completion steps in order:
+
+**Step 1 — CI/CD workflow:**
+```python
+deploy_ci_workflow(repo_name, has_frontend=has_frontend)
+```
+- If `has_frontend` is `True`: full workflow including GitHub Pages deploy job.
+- If `has_frontend` is `False`: backend-only workflow (build/test only, no deploy).
+- Scripts and DevOps tools also get `has_frontend=False`.
+
+**Step 2 — README:**
+```python
+generate_readme(history, project_name, live_url)
+```
+Written to `README.md` on the main branch.
+
+**Step 3 — CLAUDE.md for the generated repo:**
+```python
+generate_claude_md(history, tickets, project_name, live_url)
+```
+Written to `CLAUDE.md` on the main branch. This gives any future AI agent working in the generated repo a full technical context document: tech stack, folder structure, key algorithms, libraries used, and the live URL.
+
+- Sets `idea.status = "completed"` or `"failed"`.
+- Closes its own DB session in `finally`.
+
+### Tag Reading in `run_all_tickets_bg`
+```python
+project_tags: dict[str, bool] = conversation.project_tags or {}
+if project_tags:
+    has_frontend           = project_tags.get("has_frontend",           False)
+    has_backend            = project_tags.get("has_backend",            False)
+    is_script              = project_tags.get("is_script",              False)
+    is_mobile_app          = project_tags.get("is_mobile_app",          False)
+    is_devops_program      = project_tags.get("is_devops_program",      False)
+    is_full_stack          = project_tags.get("is_full_stack",          False)
+    has_mixed_technologies = project_tags.get("has_mixed_technologies",  False)
+else:
+    # Fallback for records predating the tag system
+    has_frontend  = any(t.type == "frontend" for t in all_tickets)
+    has_backend   = any(t.type == "backend"  for t in all_tickets)
+    is_script = is_mobile_app = is_devops_program = has_mixed_technologies = False
+    is_full_stack = has_frontend and has_backend
+```
 
 ---
 
-## 9. Chat Log Lifecycle
+## 10. Chat Log Lifecycle
 
 ### Storage
 Every turn is persisted immediately:
@@ -568,7 +724,7 @@ Tickets are stored in the `tickets` table, **not** in `messages`. The connection
 
 ---
 
-## 10. JIRA Integration
+## 11. JIRA Integration
 
 ### OAuth 2.0 Flow (3LO)
 1. Frontend calls `window.open('/api/auth/jira/login?token=<jwt>')`.
@@ -599,9 +755,24 @@ Called from `start-tasking` route via `push_tickets_to_jira(user_id, db, tickets
      ─────────────────────────────
      {acceptance criteria from PM agent}
      ```
-   - Labels include: ticket type, phase, sequence, dependency IDs.
+   - Labels are built in order: PM-assigned labels → ticket type → phase → sequence → dependency IDs → human-readable category stamps.
 2. Returns array of `{ id, key, title, url }` for successes and `{ error, title, status }` for failures.
 3. The `jira_error` field in `TaskingResult` is non-null if any tickets failed.
+
+### Jira Label Stamping (in `_create_jira_issue`)
+After the dependency labels are appended, `jira_service.py` adds human-readable project category stamps:
+```python
+label_set = set(labels)
+if ("has_frontend" in label_set or "is_full_stack" in label_set) and "Website" not in labels:
+    labels.append("Website")
+if "is_mobile_app" in label_set and "App" not in labels:
+    labels.append("App")
+if "is_script" in label_set and "Script" not in labels:
+    labels.append("Script")
+if "is_devops_program" in label_set and "DevOps" not in labels:
+    labels.append("DevOps")
+```
+This means every Jira ticket for a web project will have `"Website"` as a label, making Jira board filtering by project type trivial.
 
 ### Issue Status Transitions
 `transition_jira_issue(user_id, db, cloud_id, issue_key, target_status)`:
@@ -617,7 +788,7 @@ Called from `start-tasking` route via `push_tickets_to_jira(user_id, db, tickets
 
 ---
 
-## 11. GitHub Integration
+## 12. GitHub Integration
 
 ### Repository Creation (`github_service.py`)
 `create_org_repo(repo_name)`:
@@ -635,10 +806,11 @@ Called from `start-tasking` route via `push_tickets_to_jira(user_id, db, tickets
 5. Returns `True` on success, `False` on failure (logs error).
 
 ### CI/CD Deployment
-`deploy_ci_workflow(repo_name)`:
-- Writes a GitHub Actions YAML to `.github/workflows/`.
-- Typically includes: build, test, and GitHub Pages deploy steps.
+`deploy_ci_workflow(repo_name, has_frontend=True)`:
 - Called automatically when all tickets are `done`.
+- If `has_frontend=True`: full GitHub Actions YAML including build, test, and GitHub Pages deploy jobs.
+- If `has_frontend=False`: backend-only YAML (build and test only). No `enable_github_pages` call, no deploy job.
+- **Scripts, backend APIs, and DevOps tools must pass `has_frontend=False`** — there is nothing to deploy to GitHub Pages for them.
 
 ### README Generation
 After all tickets complete:
@@ -648,6 +820,14 @@ After all tickets complete:
 4. PM agent returns raw Markdown.
 5. Write to `README.md` on main branch.
 
+### CLAUDE.md Generation (for the generated repo)
+After the README is committed:
+1. Use conversation history + sorted ticket list + project metadata.
+2. Call PM agent with `_CLAUDE_MD_SYSTEM_PROMPT` (in `services/pm_agent.py`).
+3. PM agent returns a Markdown document covering: tech stack, folder structure, key algorithms, libraries and tools, agent context notes.
+4. Write to `CLAUDE.md` on main branch.
+5. This file provides any future AI agent working on the generated project with the full context they need — eliminating re-discovery work.
+
 ### Error Handling
 - GitHub errors in `write_file_to_repo` are logged at WARNING level and counted as `file_errors` in the agent result.
 - If a file write fails, the ticket is not automatically marked `failed` (partial writes are tolerated).
@@ -655,7 +835,7 @@ After all tickets complete:
 
 ---
 
-## 12. Authentication & Sessions
+## 13. Authentication & Sessions
 
 ### JWT (Local Users)
 - Library: PyJWT (via `python-jose`).
@@ -689,7 +869,7 @@ api.interceptors.request.use(config => {
 
 ---
 
-## 13. Frontend Architecture
+## 14. Frontend Architecture
 
 ### Routing (`src/main.jsx` or `App.jsx`)
 | Path | Component | Notes |
@@ -767,7 +947,7 @@ Wraps the entire app. Reads initial theme from `localStorage` (`aif_theme`). App
 
 ---
 
-## 14. End-to-End Flow Walkthrough
+## 15. End-to-End Flow Walkthrough
 
 This is the canonical execution path for a new project build.
 
@@ -791,20 +971,23 @@ This is the canonical execution path for a new project build.
    └─ POST /conversations/{id}/start-tasking
          a. Conversation status → "tasking"
          b. PM Agent called with full history + ACTION sentinel
-         c. PM returns ticket JSON
-         d. GitHub repo created (github_service.create_org_repo)
+         c. PM returns JSON: projectName, projectTags, githubRepoName, jiraProjectKey, tickets[]
+         d. projectTags saved to conversation.project_tags (JSON column)
+         e. GitHub repo created (github_service.create_org_repo)
               └─ conversation.github_repo_name, github_repo_url saved
-         e. Jira tickets created (jira_service.push_tickets_to_jira)
+         f. Jira tickets created (jira_service.push_tickets_to_jira)
               └─ Per ticket: POST to Jira REST API v3
+              └─ Labels include tag names + human-readable category stamps
               └─ Returns [{id, key, title, url}]
-         f. Tickets saved to DB (agent_runner.store_tickets)
+         g. Tickets saved to DB (agent_runner.store_tickets)
               └─ jira_issue_key mapped from jira_results
-         g. POST /agents/{id}/run called → queues BackgroundTask
-         h. TaskingResult returned to frontend immediately
+         h. POST /agents/{id}/run called → queues BackgroundTask
+         i. TaskingResult returned to frontend immediately
 
 4. Background: agent_runner.run_all_tickets_bg
    └─ Creates own DB session
    └─ Idea status → "processing"
+   └─ Reads conversation.project_tags → sets has_frontend, has_backend, is_script, etc.
    └─ LOOP:
          a. get_runnable_tickets → tickets with all deps "done"
          b. Group by sequence number
@@ -813,15 +996,19 @@ This is the canonical execution path for a new project build.
                     i.   ticket.status → "in_progress"
                     ii.  Jira issue → "In Progress"
                     iii. Fetch GitHub file tree for context
-                    iv.  Call backend_agent or frontend_agent LLM
+                    iv.  Call backend_agent (type="backend") or frontend_agent (type="frontend")
                     v.   Parse JSON output
                     vi.  For each file: write_file_to_repo
                     vii. ticket.status → "done" or "failed"
                     viii.Jira issue → "Done"
          d. Repeat until no runnable tickets remain
-   └─ deploy_ci_workflow(repo_name)
-   └─ generate_readme(history, project_name, live_url)
-   └─ Commit README.md to GitHub
+   └─ Step 1: deploy_ci_workflow(repo_name, has_frontend=has_frontend)
+         └─ has_frontend=True  → full CI + GitHub Pages deploy job
+         └─ has_frontend=False → backend/build-only CI, no GitHub Pages
+   └─ Step 2: generate_readme(history, project_name, live_url)
+         └─ Commits README.md to main branch
+   └─ Step 3: generate_claude_md(history, tickets, project_name, live_url)
+         └─ Commits CLAUDE.md to main branch (AI agent context for the generated repo)
    └─ idea.status → "completed" or "failed"
 
 5. Frontend polling
@@ -832,7 +1019,7 @@ This is the canonical execution path for a new project build.
 
 ---
 
-## 15. Environment Variables
+## 16. Environment Variables
 
 ### Backend (`backend/.env`)
 ```bash
@@ -871,7 +1058,7 @@ VITE_API_BASE_URL=https://your-backend.railway.app
 
 ---
 
-## 16. Build & Development Commands
+## 17. Build & Development Commands
 
 ### Backend
 ```bash
@@ -897,7 +1084,7 @@ npm run lint      # ESLint
 
 ---
 
-## 17. Deployment
+## 18. Deployment
 
 ### Backend (Railway.app)
 - Config: `backend/railway.json`
@@ -914,7 +1101,7 @@ npm run lint      # ESLint
 
 ---
 
-## 18. Coding Conventions
+## 19. Coding Conventions
 
 ### Python / Backend
 - **snake_case** for all variables, functions, and file names.
@@ -935,7 +1122,7 @@ npm run lint      # ESLint
 
 ---
 
-## 19. State Machines
+## 20. State Machines
 
 ### Conversation Status
 ```
@@ -959,12 +1146,22 @@ pending  ──(agent picks up)──→  in_progress  ──(success)──→ 
 
 ---
 
-## 20. Known Limitations & Future Work
+## 21. Known Limitations & Future Work
 
 ### Disabled / Partially Implemented
 - **AI Personality:** Register page includes personality selection (concise/balanced/detailed) but it is not passed to the PM Agent system prompt.
 - **Email Notifications:** Toggle in settings is saved but no emails are sent.
 - **Jira Project Auto-Creation:** Code exists in `jira_service.py` but is commented out in `conversations.py`. Users must pre-create the project.
+
+### Planned Agent Expansion (Tag-Driven)
+The project type tag system was designed to enable additional specialized agents in the future. Current state:
+- `type: "backend"` → Backend Developer Agent ✅
+- `type: "frontend"` → Frontend Developer Agent ✅
+- `is_mobile_app` → Mobile Developer Agent (not yet implemented)
+- `is_devops_program` → DevOps Agent (not yet implemented)
+- `is_script` → Script/CLI Agent (currently falls through to Backend Agent — workable but not ideal)
+
+When adding new agent types: create a system prompt in `backend/agents/`, a service in `backend/services/`, and add routing logic in `agent_runner.run_ticket()` based on the ticket type or project tags.
 
 ### Architectural Gaps
 - **No WebSockets:** All real-time updates use REST polling at ~1 s intervals. Adding WebSocket support would reduce latency and server load.
@@ -975,9 +1172,12 @@ pending  ──(agent picks up)──→  in_progress  ──(success)──→ 
 - **SQLite in Dev, PostgreSQL in Prod:** Schema drift risk. No Alembic migrations — additive changes are applied in `main.py` manually.
 - **Agent Output is Ephemeral:** `Ticket.agent_output` stores the raw JSON per ticket, but there's no UI to inspect it. Debugging failed tickets requires direct DB access.
 
-### Suggested Improvements for AI Agents Working in This Codebase
+### Important Notes for AI Agents Working in This Codebase
 - When modifying agent prompts, always test with a complete conversation history — the PM Agent is stateful and depends on prior context.
 - When adding new API routes, check whether they need auth (`Depends(get_current_user)`). The unauthenticated routes above are a known gap, not a pattern to follow.
-- When modifying the `Ticket` or `Conversation` models, remember there are no migrations — add columns defensively in `main.py` with `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE` guards.
+- When modifying the `Ticket` or `Conversation` models, remember there are no migrations — add columns defensively in `main.py` with `ALTER TABLE` guards.
 - When changing the PM Agent's ticket JSON schema, update `agent_runner.store_tickets()` and the `Ticket` model in sync — they are tightly coupled.
 - The `__PM_READY__` token is the PM-to-backend signal for readiness. If you change the PM system prompt, ensure this token is still emitted in the right circumstances.
+- **Never infer project type from ticket types at runtime** — always read from `conversation.project_tags`. The tags are the authoritative source. Ticket types are a downstream consequence of tags, not the other way around.
+- **Never deploy to GitHub Pages** for projects where `has_frontend` is `False`. Pass `has_frontend` explicitly to `deploy_ci_workflow()`.
+- The `is_full_stack` tag is always derived (`has_frontend AND has_backend`) — never trust or store the LLM's raw value for this key.
