@@ -18,7 +18,7 @@ import logging
 from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 
 from db.database import get_db
 from models.conversation import Conversation
@@ -56,6 +56,31 @@ def _ticket_counts(tickets: list[Ticket]) -> dict:
     return {"done": done, "failed": failed, "still_pending": pending}
 
 
+def _status_tickets(conversation_id: int, db: Session) -> list[Ticket]:
+    """Fetch the minimal ticket fields needed for polling/status UI."""
+    return (
+        db.query(Ticket)
+        .options(load_only(
+            Ticket.id,
+            Ticket.conversation_id,
+            Ticket.ticket_id,
+            Ticket.jira_issue_key,
+            Ticket.type,
+            Ticket.phase,
+            Ticket.sequence,
+            Ticket.priority,
+            Ticket.title,
+            Ticket.status,
+            Ticket.error_msg,
+            Ticket.created_at,
+            Ticket.updated_at,
+        ))
+        .filter(Ticket.conversation_id == conversation_id)
+        .order_by(Ticket.sequence.asc().nullslast())
+        .all()
+    )
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.post("/{conversation_id}/run", response_model=AgentRunResponse)
@@ -75,12 +100,7 @@ async def run_agents(
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
-    tickets = (
-        db.query(Ticket)
-        .filter(Ticket.conversation_id == conversation_id)
-        .order_by(Ticket.sequence.asc().nullslast())
-        .all()
-    )
+    tickets = _status_tickets(conversation_id, db)
     if not tickets:
         raise HTTPException(
             status_code=404,
@@ -144,12 +164,7 @@ def get_ticket_status(
 ):
     """Return current ticket statuses for a conversation (for polling)."""
     _get_owned_conversation(conversation_id, current_user.id, db)
-    tickets = (
-        db.query(Ticket)
-        .filter(Ticket.conversation_id == conversation_id)
-        .order_by(Ticket.sequence.asc().nullslast())
-        .all()
-    )
+    tickets = _status_tickets(conversation_id, db)
     counts = _ticket_counts(tickets)
     return AgentRunResponse(
         conversation_id=conversation_id,
@@ -225,12 +240,7 @@ async def retry_ticket(
 
     background_tasks.add_task(run_all_tickets_bg, conversation_id, current_user.id)
 
-    tickets = (
-        db.query(Ticket)
-        .filter(Ticket.conversation_id == conversation_id)
-        .order_by(Ticket.sequence.asc().nullslast())
-        .all()
-    )
+    tickets = _status_tickets(conversation_id, db)
     counts = _ticket_counts(tickets)
     return AgentRunResponse(
         conversation_id=conversation_id,

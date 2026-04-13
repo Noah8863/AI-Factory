@@ -1,19 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import api from '../utils/api'
 import './Login.scss'
-
-const VALID_USERNAME = import.meta.env.VITE_AUTH_USERNAME
-const VALID_PASSWORD_HASH = import.meta.env.VITE_AUTH_PASSWORD_HASH
-
-async function sha256(str) {
-  const buf = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(str)
-  )
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
 
 export default function Login() {
   const navigate = useNavigate()
@@ -26,28 +14,28 @@ export default function Login() {
     setError('')
   }
 
-const handleSubmit = async (e) => {
-  e.preventDefault()
-  if (!form.username.trim() || !form.password.trim()) {
-    setError('Please fill in all fields.')
-    return
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!form.username.trim() || !form.password.trim()) {
+      setError('Please fill in all fields.')
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await api.post('/auth/login', {
+        email: form.username.trim(),
+        password: form.password,
+      })
+      const { access_token, user } = res.data
+      localStorage.setItem('aif_token', access_token)
+      localStorage.setItem('aif_user', JSON.stringify(user))
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Invalid email or password.')
+    } finally {
+      setLoading(false)
+    }
   }
-  setLoading(true)
-  try {
-    const res = await api.post('/auth/login', {
-      email: form.username.trim(),
-      password: form.password,
-    })
-    const { access_token, user } = res.data
-    localStorage.setItem('aif_token', access_token)
-    localStorage.setItem('aif_user', JSON.stringify(user))
-    navigate('/dashboard')
-  } catch (err) {
-    setError(err.response?.data?.detail || 'Invalid email or password.')
-  } finally {
-    setLoading(false)
-  }
-}
 
   return (
     <div className="login-page">

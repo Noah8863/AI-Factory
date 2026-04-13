@@ -10,15 +10,10 @@ class TicketRead(BaseModel):
     type:            str
     phase:           str | None
     sequence:        int | None
-    depends_on:      list[str]
     priority:        str | None
     title:           str
-    description:     str
-    story_points:    int | None
-    labels:          list[str]
     status:          str
     error_msg:       str | None
-    agent_output:    str | None
     created_at:      datetime
     updated_at:      datetime
 

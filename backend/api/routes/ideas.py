@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, load_only
 from db.database import get_db
 from models.idea import Idea
 from models.conversation import Conversation
@@ -142,6 +142,21 @@ def get_idea_tickets(
 
     tickets = (
         db.query(Ticket)
+        .options(load_only(
+            Ticket.id,
+            Ticket.conversation_id,
+            Ticket.ticket_id,
+            Ticket.jira_issue_key,
+            Ticket.type,
+            Ticket.phase,
+            Ticket.sequence,
+            Ticket.priority,
+            Ticket.title,
+            Ticket.status,
+            Ticket.error_msg,
+            Ticket.created_at,
+            Ticket.updated_at,
+        ))
         .filter(Ticket.conversation_id == conversation.id)
         .order_by(Ticket.sequence.asc().nullslast())
         .all()
