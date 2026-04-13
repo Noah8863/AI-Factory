@@ -312,6 +312,13 @@
   display: flex;
   flex-direction: column;
   gap: 7px;
+  opacity: 0;
+  animation: reg-item-rise 0.4s $ease-out both;
+
+  &:nth-child(1) { animation-delay: 0.04s; }
+  &:nth-child(2) { animation-delay: 0.08s; }
+  &:nth-child(3) { animation-delay: 0.12s; }
+  &:nth-child(4) { animation-delay: 0.16s; }
 
   &__label {
     font-size: 0.8125rem;
@@ -472,6 +479,11 @@
   gap: 10px;
   transition: all 0.25s $ease-out;
   overflow: hidden;
+  opacity: 0;
+  animation: reg-item-rise 0.42s $ease-out both;
+
+  &:nth-child(1) { animation-delay: 0.05s; }
+  &:nth-child(2) { animation-delay: 0.1s; }
 
   &:hover {
     border-color: $border-strong;
@@ -639,6 +651,12 @@
   background: $bg-elevated;
   cursor: pointer;
   transition: all 0.25s $ease-out;
+  opacity: 0;
+  animation: reg-item-rise 0.42s $ease-out both;
+
+  &:nth-child(1) { animation-delay: 0.05s; }
+  &:nth-child(2) { animation-delay: 0.1s; }
+  &:nth-child(3) { animation-delay: 0.15s; }
 
   .material-icons {
     font-size: 22px;
@@ -699,7 +717,7 @@
   border: 1px solid $border-default;
   border-radius: $radius-lg;
   transition: $transition;
-  animation: fadeUp 0.4s $ease-out both;
+  animation: reg-item-rise 0.45s $ease-out both;
 
   &:nth-child(2) { animation-delay: 0.08s; }
 
@@ -1044,4 +1062,15 @@
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes reg-item-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

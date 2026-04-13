@@ -194,6 +194,13 @@
   border-radius: $radius-xl;
   padding: clamp(20px, 2.8vw, 30px) clamp(18px, 3vw, 32px);
   margin-bottom: clamp(14px, 2.4vw, 22px);
+  opacity: 0;
+  animation: profile-card-rise 0.48s $ease-out both;
+
+  &:nth-of-type(1) { animation-delay: 0.04s; }
+  &:nth-of-type(2) { animation-delay: 0.1s; }
+  &:nth-of-type(3) { animation-delay: 0.16s; }
+  &:nth-of-type(4) { animation-delay: 0.22s; }
 
   @media (max-width: 480px) {
     padding: 20px 18px;
@@ -238,6 +245,8 @@
   flex-shrink: 0;
   overflow: hidden;
   transition: $transition;
+  box-shadow: 0 0 0 rgba($indigo, 0);
+  animation: avatar-breathe 4.6s ease-in-out infinite;
 
   &:hover, &:focus-visible {
     border-color: $indigo;
@@ -887,4 +896,25 @@
   10%  { opacity: 0.7; }
   90%  { opacity: 0.4; }
   100% { opacity: 0;   transform: translateY(-80vh) scale(1.2); }
+}
+
+@keyframes profile-card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes avatar-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba($indigo, 0);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba($indigo, 0.22);
+  }
 }

@@ -118,6 +118,11 @@
     letter-spacing: -0.03em;
     color: $text-primary;
     margin-bottom: 24px;
+
+    .gradient-text {
+      background-size: 220% 220%;
+      animation: gradient-pan 7s ease-in-out infinite;
+    }
   }
 
   &__subtitle {
@@ -225,6 +230,13 @@
   background: $bg-surface;
   margin: 0 8px;
   transition: $transition;
+  opacity: 0;
+  animation: landing-card-rise 0.55s $ease-out both;
+
+  &:nth-child(1) { animation-delay: 0.06s; }
+  &:nth-child(2) { animation-delay: 0.12s; }
+  &:nth-child(3) { animation-delay: 0.18s; }
+  &:nth-child(4) { animation-delay: 0.24s; }
 
   @media (max-width: 900px) { margin: 0; }
 
@@ -320,6 +332,15 @@
   border: 1px solid $border-subtle;
   border-radius: $radius-lg;
   transition: $transition;
+  opacity: 0;
+  animation: landing-card-rise 0.55s $ease-out both;
+
+  &:nth-child(1) { animation-delay: 0.04s; }
+  &:nth-child(2) { animation-delay: 0.09s; }
+  &:nth-child(3) { animation-delay: 0.14s; }
+  &:nth-child(4) { animation-delay: 0.19s; }
+  &:nth-child(5) { animation-delay: 0.24s; }
+  &:nth-child(6) { animation-delay: 0.29s; }
 
   &:hover {
     background: $bg-elevated;
@@ -461,5 +482,26 @@
   &__copy {
     font-size: 0.8125rem;
     color: $text-tertiary;
+  }
+}
+
+@keyframes landing-card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
   }
 }
