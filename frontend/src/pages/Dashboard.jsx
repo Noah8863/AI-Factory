@@ -9,6 +9,14 @@ import './Dashboard.scss'
 const JIRA_REQUIRED_MESSAGE = 'Please connect your Jira account before making a project.'
 const JIRA_PROJECT_REQUIRED_MESSAGE = 'Please select a target Jira project on your Profile page before starting a chat.'
 
+const PROJECT_TYPES = [
+  { id: 'web-app',    label: 'Web App',      icon: 'layers',      pmLabel: 'Web App',      color: 'indigo'  },
+  { id: 'backend',    label: 'Backend API',  icon: 'dns',         pmLabel: 'Backend API',  color: 'sky'     },
+  { id: 'script',     label: 'Script / CLI', icon: 'terminal',    pmLabel: 'Script / CLI', color: 'emerald' },
+  { id: 'mobile',     label: 'Mobile App',   icon: 'smartphone',  pmLabel: 'Mobile App',   color: 'violet'  },
+  { id: 'devops',     label: 'DevOps Tool',  icon: 'build',       pmLabel: 'DevOps Tool',  color: 'amber'   },
+]
+
 
 function getIdeaPill(idea, ideaTicketsMap) {
   const data = ideaTicketsMap[idea.id]
@@ -48,6 +56,7 @@ export default function Dashboard() {
 
   // ── Idea input state ────────────────────────────────────────
   const [text, setText] = useState(() => localStorage.getItem(DRAFT_KEY) || '')
+  const [selectedProjectType, setSelectedProjectType] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [inputError, setInputError] = useState('')
   const textareaRef = useRef(null)
@@ -201,12 +210,16 @@ export default function Dashboard() {
     setTaskingResult(null)
     setSendError('')
     try {
-      const res = await startConversation(text.trim())
+      const ideaContent = selectedProjectType
+        ? `[PROJECT_TYPE: ${selectedProjectType.pmLabel}]\n\n${text.trim()}`
+        : text.trim()
+      const res = await startConversation(ideaContent)
       const { conversation: conv, messages: msgs } = res.data
       setConversation(conv)
       setMessages(msgs)
       setShowReadyBanner(conv.status === 'ready_to_task')
       setText('')
+      setSelectedProjectType(null)
       localStorage.removeItem(DRAFT_KEY)
       setActiveNav('chat')
       fetchIdeas()
@@ -636,6 +649,20 @@ export default function Dashboard() {
                 </button>
               </div>
             )}
+
+            <div className="project-type-picker">
+              {PROJECT_TYPES.map((type) => (
+                <button
+                  key={type.id}
+                  className={`type-chip type-chip--${type.color} ${selectedProjectType?.id === type.id ? 'type-chip--active' : ''}`}
+                  onClick={() => setSelectedProjectType(prev => prev?.id === type.id ? null : type)}
+                  disabled={jiraStatus !== 'connected' || !jiraProjectSelected}
+                >
+                  <span className="material-icons">{type.icon}</span>
+                  {type.label}
+                </button>
+              ))}
+            </div>
 
             <div className="idea-input">
               <textarea

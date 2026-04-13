@@ -621,6 +621,90 @@
   to { transform: rotate(360deg); }
 }
 
+// ─── Project type picker ──────────────────────────────────────────────────────
+
+.project-type-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: $radius-full;
+  border: 1px solid $border-default;
+  background: $bg-surface;
+  color: $text-secondary;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: $transition;
+
+  .material-icons { font-size: 0.9375rem; }
+
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  // ── Web App — indigo ──────────────────────────────────────────────────────
+  &--indigo {
+    .material-icons { color: rgba($indigo, 0.6); }
+    &:hover:not(:disabled) { border-color: $indigo; color: $indigo; background: rgba($indigo, 0.08); }
+    &.type-chip--active {
+      border-color: $indigo; color: $indigo;
+      background: rgba($indigo, 0.12);
+      box-shadow: 0 0 0 3px rgba($indigo, 0.14), 0 2px 12px rgba($indigo, 0.18);
+    }
+  }
+
+  // ── Backend API — sky ─────────────────────────────────────────────────────
+  &--sky {
+    .material-icons { color: rgba($sky, 0.6); }
+    &:hover:not(:disabled) { border-color: $sky; color: $sky; background: rgba($sky, 0.08); }
+    &.type-chip--active {
+      border-color: $sky; color: $sky;
+      background: rgba($sky, 0.10);
+      box-shadow: 0 0 0 3px rgba($sky, 0.14), 0 2px 12px rgba($sky, 0.16);
+    }
+  }
+
+  // ── Script / CLI — emerald ────────────────────────────────────────────────
+  &--emerald {
+    .material-icons { color: rgba($emerald, 0.6); }
+    &:hover:not(:disabled) { border-color: $emerald; color: $emerald; background: rgba($emerald, 0.08); }
+    &.type-chip--active {
+      border-color: $emerald; color: $emerald;
+      background: rgba($emerald, 0.10);
+      box-shadow: 0 0 0 3px rgba($emerald, 0.14), 0 2px 12px rgba($emerald, 0.16);
+    }
+  }
+
+  // ── Mobile App — violet ───────────────────────────────────────────────────
+  &--violet {
+    .material-icons { color: rgba($violet, 0.6); }
+    &:hover:not(:disabled) { border-color: $violet; color: $violet; background: rgba($violet, 0.08); }
+    &.type-chip--active {
+      border-color: $violet; color: $violet;
+      background: rgba($violet, 0.12);
+      box-shadow: 0 0 0 3px rgba($violet, 0.14), 0 2px 12px rgba($violet, 0.18);
+    }
+  }
+
+  // ── DevOps Tool — amber ───────────────────────────────────────────────────
+  &--amber {
+    .material-icons { color: rgba($amber, 0.6); }
+    &:hover:not(:disabled) { border-color: $amber; color: $amber; background: rgba($amber, 0.08); }
+    &.type-chip--active {
+      border-color: $amber; color: $amber;
+      background: rgba($amber, 0.10);
+      box-shadow: 0 0 0 3px rgba($amber, 0.14), 0 2px 12px rgba($amber, 0.16);
+    }
+  }
+}
+
 // ─── Error ───────────────────────────────────────────────────────────────────
 
 .idea-panel__error {
