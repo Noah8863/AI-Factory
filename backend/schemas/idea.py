@@ -8,6 +8,7 @@ class IdeaCreate(BaseModel):
 
 class IdeaRead(BaseModel):
     id: int
+    title: str | None = None
     content: str
     status: str
     created_at: datetime

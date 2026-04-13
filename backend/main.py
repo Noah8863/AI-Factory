@@ -33,6 +33,9 @@ logger.info("Database tables created/verified")
 # Add new columns to existing tables (idempotent — safe to run on every boot)
 with engine.connect() as _conn:
     _conn.execute(text(
+        "ALTER TABLE ideas ADD COLUMN IF NOT EXISTS title VARCHAR(255)"
+    ))
+    _conn.execute(text(
         "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS github_repo_name VARCHAR(255)"
     ))
     _conn.execute(text(

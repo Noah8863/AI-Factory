@@ -24,6 +24,7 @@ export default function DevProgress({
   const failedCount = agentTickets.filter(t => t.status === 'failed').length
   const cancelledCount = agentTickets.filter(t => t.status === 'cancelled').length
   const pendingCount = agentTickets.filter(t => t.status === 'pending').length
+  const hasActiveTicket = activeCount > 0
   const rootClass = compact ? 'dev-progress dev-progress--compact' : 'dev-progress'
 
   return (
@@ -60,7 +61,11 @@ export default function DevProgress({
             </div>
           )}
           {onRefreshTickets && (
-            <button className="dev-progress__refresh" onClick={onRefreshTickets} title="Refresh ticket status">
+            <button
+              className={`dev-progress__refresh ${hasActiveTicket ? 'dev-progress__refresh--live' : ''}`}
+              onClick={onRefreshTickets}
+              title="Refresh ticket status"
+            >
               <span className="material-icons">refresh</span>
             </button>
           )}

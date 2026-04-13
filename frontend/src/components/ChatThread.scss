@@ -885,7 +885,7 @@
     flex-shrink: 0;
 
     &--done    { color: $emerald; }
-    &--active  { color: $indigo; animation: spin 1.2s linear infinite; }
+    &--active  { color: $indigo; animation: spin 1.2s linear infinite reverse; }
     &--failed  { color: $rose; }
     &--pending { color: $text-tertiary; }
   }
@@ -1426,6 +1426,225 @@
 
   &:active {
     background: rgba($rose, 0.22);
+  }
+}
+
+// ── In-app toast ────────────────────────────────────────────────────────────
+
+.chat-toast {
+  position: fixed;
+  top: 76px;
+  right: 16px;
+  z-index: 280;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(460px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border-radius: $radius-lg;
+  border: 1px solid $border-default;
+  background: var(--bg-surface-glass);
+  box-shadow: $shadow-card;
+  animation: fadeUp 0.18s $ease-out both;
+
+  &--success {
+    border-color: rgba($emerald, 0.34);
+
+    .chat-toast__icon { color: $emerald; }
+  }
+
+  &--error {
+    border-color: rgba($rose, 0.36);
+
+    .chat-toast__icon { color: $rose; }
+  }
+}
+
+.chat-toast__icon {
+  font-size: 18px;
+  color: $indigo;
+  flex-shrink: 0;
+}
+
+.chat-toast__text {
+  flex: 1;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: $text-primary;
+}
+
+.chat-toast__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid $border-subtle;
+  border-radius: $radius-full;
+  background: transparent;
+  color: $text-tertiary;
+  cursor: pointer;
+  transition: $transition;
+
+  .material-icons { font-size: 15px; }
+
+  &:hover {
+    color: $text-primary;
+    border-color: $border-default;
+    background: $bg-elevated;
+  }
+}
+
+@media (max-width: 640px) {
+  .chat-toast {
+    top: 72px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    padding: 9px 10px;
+  }
+}
+
+// ── Stop agents confirmation modal ──────────────────────────────────────────
+
+.chat-stop-modal__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(2, 4, 14, 0.68);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.chat-stop-modal {
+  width: min(100%, 470px);
+  background: $bg-surface;
+  border: 1px solid $border-default;
+  border-radius: $radius-xl;
+  padding: 24px 22px;
+  box-shadow: $shadow-card;
+  animation: fadeUp 0.18s $ease-out both;
+}
+
+.chat-stop-modal__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: $radius-md;
+  background: rgba($amber, 0.12);
+  border: 1px solid rgba($amber, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+
+  .material-icons {
+    font-size: 22px;
+    color: $amber;
+  }
+}
+
+.chat-stop-modal__title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: $text-primary;
+  margin-bottom: 10px;
+}
+
+.chat-stop-modal__text {
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: $text-secondary;
+  margin-bottom: 18px;
+}
+
+.chat-stop-modal__hint {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: $amber;
+  background: rgba($amber, 0.08);
+  border: 1px solid rgba($amber, 0.25);
+  border-radius: $radius-md;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.chat-stop-modal__error {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: $rose;
+  background: rgba($rose, 0.08);
+  border: 1px solid rgba($rose, 0.24);
+  border-radius: $radius-md;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+}
+
+.chat-stop-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.chat-stop-modal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 9px 16px;
+  border-radius: $radius-full;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: $transition;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &--ghost {
+    background: transparent;
+    color: $text-secondary;
+    border: 1px solid $border-default;
+
+    &:hover:not(:disabled) {
+      background: $bg-elevated;
+      color: $text-primary;
+      border-color: $border-strong;
+    }
+  }
+
+  &--danger {
+    background: rgba($rose, 0.14);
+    color: $rose;
+    border: 1px solid rgba($rose, 0.35);
+
+    &:hover:not(:disabled) {
+      background: rgba($rose, 0.22);
+      border-color: rgba($rose, 0.52);
+    }
+  }
+}
+
+@media (max-width: 640px) {
+  .chat-stop-modal {
+    padding: 20px 16px;
+    border-radius: $radius-lg;
+  }
+
+  .chat-stop-modal__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .chat-stop-modal__btn {
+    width: 100%;
   }
 }
 

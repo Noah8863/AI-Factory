@@ -25,6 +25,11 @@
   100% { transform: translateX(350%); }
 }
 
+@keyframes spin-reverse {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(-360deg); }
+}
+
 .dev-progress {
   flex-shrink: 0;
   border-bottom: 1px solid rgba($indigo, 0.22);
@@ -165,6 +170,10 @@
 
     &:active .material-icons {
       animation: spin 0.4s linear;
+    }
+
+    &--live .material-icons {
+      animation: spin-reverse 1s linear infinite;
     }
   }
 
@@ -372,7 +381,7 @@
     flex-shrink: 0;
 
     &--done    { color: $emerald; }
-    &--active  { color: $indigo; animation: spin 1.2s linear infinite; }
+    &--active  { color: $indigo; animation: spin-reverse 1.2s linear infinite; }
     &--failed  { color: $rose; }
     &--cancelled { color: $amber; }
     &--pending { color: $text-tertiary; }

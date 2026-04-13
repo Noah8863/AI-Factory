@@ -124,8 +124,13 @@ export default function ChatThread({
   onBack,
 }) {
   const [input, setInput] = useState('')
+  const [showStopConfirm, setShowStopConfirm] = useState(false)
+  const [isStoppingAgents, setIsStoppingAgents] = useState(false)
+  const [stopModalError, setStopModalError] = useState('')
+  const [toast, setToast] = useState(null)
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const toastTimerRef = useRef(null)
   const isTasking = status === 'tasking'
   const isDone    = status === 'done'
   const isJiraBlocked = jiraStatus !== 'connected' || !jiraProjectSelected
@@ -142,6 +147,7 @@ export default function ChatThread({
   const [phraseIndex, setPhraseIndex] = useState(0)
   const [phraseVisible, setPhraseVisible] = useState(true)
   const prevShowReadyBannerRef = useRef(showReadyBanner)
+  const stoppableTicketsCount = agentTickets.filter((ticket) => ['pending', 'in_progress'].includes(ticket.status)).length
 
   useEffect(() => {
     if (!isTaskingLoading) return
@@ -174,6 +180,35 @@ export default function ChatThread({
     prevShowReadyBannerRef.current = showReadyBanner
   }, [showReadyBanner, isTasking, isDone])
 
+  useEffect(() => {
+    if (!devInProcess) {
+      setShowStopConfirm(false)
+      setIsStoppingAgents(false)
+      setStopModalError('')
+    }
+  }, [devInProcess])
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!showStopConfirm) return
+
+    const handleEsc = (event) => {
+      if (event.key === 'Escape' && !isStoppingAgents) {
+        setShowStopConfirm(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [showStopConfirm, isStoppingAgents])
+
   const handleSend = () => {
     const trimmed = input.trim()
     if (!trimmed || isSending || isTasking || isDone || isJiraBlocked || sessionExpired) return
@@ -189,8 +224,120 @@ export default function ChatThread({
     }
   }
 
+  const showToast = (type, message, duration = 3400) => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current)
+    }
+
+    setToast({ type, message })
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, duration)
+  }
+
+  const handleOpenStopConfirm = () => {
+    if (!devInProcess || !onCancelAgents) return
+    setStopModalError('')
+    setShowStopConfirm(true)
+  }
+
+  const handleCloseStopConfirm = () => {
+    if (isStoppingAgents) return
+    setStopModalError('')
+    setShowStopConfirm(false)
+  }
+
+  const handleConfirmStopAgents = async () => {
+    if (!onCancelAgents || isStoppingAgents) return
+    setIsStoppingAgents(true)
+    setStopModalError('')
+
+    try {
+      const result = await onCancelAgents()
+      if (!result?.ok) {
+        const message = result?.error || 'Unable to stop agents right now. Please try again.'
+        setStopModalError(message)
+        showToast('error', message, 4200)
+        return
+      }
+
+      setShowStopConfirm(false)
+      showToast('success', 'Agents stopped. Development has been halted for this run.', 4200)
+    } finally {
+      setIsStoppingAgents(false)
+    }
+  }
+
+  const closeToast = () => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = null
+    }
+    setToast(null)
+  }
+
   return (
     <div className="chat-thread">
+
+      {/* ── In-app toast ─────────────────────────────────────── */}
+      {toast && (
+        <div className={`chat-toast chat-toast--${toast.type}`} role="status" aria-live="polite">
+          <span className="material-icons chat-toast__icon">
+            {toast.type === 'success' ? 'check_circle' : toast.type === 'error' ? 'error' : 'info'}
+          </span>
+          <span className="chat-toast__text">{toast.message}</span>
+          <button className="chat-toast__close" onClick={closeToast} aria-label="Dismiss notification">
+            <span className="material-icons">close</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── Stop agents confirmation modal ────────────────────── */}
+      {showStopConfirm && (
+        <div className="chat-stop-modal__overlay" onClick={handleCloseStopConfirm}>
+          <div
+            className="chat-stop-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="chat-stop-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="chat-stop-modal__icon">
+              <span className="material-icons">warning</span>
+            </div>
+            <h3 className="chat-stop-modal__title" id="chat-stop-modal-title">
+              Stop development agents?
+            </h3>
+            <p className="chat-stop-modal__text">
+              This will completely halt your development run. The agents will stop immediately and the project will not be finished automatically.
+            </p>
+            {stoppableTicketsCount > 0 && (
+              <p className="chat-stop-modal__hint">
+                {stoppableTicketsCount} ticket{stoppableTicketsCount !== 1 ? 's are' : ' is'} still pending or running and will be left unfinished.
+              </p>
+            )}
+            {stopModalError && <p className="chat-stop-modal__error">{stopModalError}</p>}
+            <div className="chat-stop-modal__actions">
+              <button
+                className="chat-stop-modal__btn chat-stop-modal__btn--ghost"
+                onClick={handleCloseStopConfirm}
+                disabled={isStoppingAgents}
+                autoFocus
+              >
+                Keep Running
+              </button>
+              <button
+                className="chat-stop-modal__btn chat-stop-modal__btn--danger"
+                onClick={handleConfirmStopAgents}
+                disabled={isStoppingAgents}
+              >
+                {isStoppingAgents ? 'Stopping…' : 'Stop Agents'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Tasking loading overlay ────────────────────────────── */}
       {isTaskingLoading && (
@@ -255,7 +402,7 @@ export default function ChatThread({
           />
           {devInProcess && onCancelAgents && (
             <div className="chat-thread__stop-bar">
-              <button className="chat-thread__stop-btn" onClick={onCancelAgents}>
+              <button className="chat-thread__stop-btn" onClick={handleOpenStopConfirm}>
                 <span className="material-icons">stop_circle</span>
                 Stop Agents
               </button>

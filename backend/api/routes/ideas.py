@@ -13,6 +13,7 @@ from schemas.conversation import ConversationDetail, ConversationRead
 from schemas.message import MessageRead
 from schemas.ticket import AgentRunResponse, TicketRead
 from services.auth_service import get_current_user
+from services import pm_agent
 
 router = APIRouter(prefix="/ideas", tags=["ideas"])
 
@@ -23,7 +24,11 @@ def create_idea(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    idea = Idea(content=payload.content, user_id=current_user.id)
+    idea = Idea(
+        content=payload.content,
+        user_id=current_user.id,
+        title=pm_agent.summarize_idea(payload.content),
+    )
     db.add(idea)
     db.commit()
     db.refresh(idea)

@@ -17,6 +17,8 @@ const PROJECT_TYPES = [
   { id: 'devops',     label: 'DevOps Tool',  icon: 'build',       pmLabel: 'DevOps Tool',  color: 'amber'   },
 ]
 
+const PROJECT_TYPE_PREFIX_RE = /^\s*\[PROJECT_TYPE:\s*([^\]]+)\]\s*/i
+
 const PROJECT_TAG_KEYS = [
   'has_frontend',
   'has_backend',
@@ -117,6 +119,35 @@ function formatDate(iso) {
 
 function truncate(str, n = 160) {
   return str.length > n ? str.slice(0, n) + '…' : str
+}
+
+function getIdeaDisplayMeta(idea) {
+  const rawContent = (idea?.content || '').trim()
+  const typeMatch = rawContent.match(PROJECT_TYPE_PREFIX_RE)
+  const rawTypeLabel = typeMatch?.[1]?.trim() || null
+  const cleanedContent = rawContent.replace(PROJECT_TYPE_PREFIX_RE, '').trim()
+
+  const normalizedType = rawTypeLabel?.toLowerCase() || ''
+  const mappedType = PROJECT_TYPES.find((type) => {
+    const options = [type.label, type.pmLabel]
+      .filter(Boolean)
+      .map((value) => value.toLowerCase())
+    return options.includes(normalizedType)
+  })
+
+  const typePill = rawTypeLabel
+    ? {
+        label: mappedType?.label || rawTypeLabel,
+        icon: mappedType?.icon || 'category',
+        color: mappedType?.color || 'indigo',
+      }
+    : null
+
+  const headlineSource = (idea?.title || '').trim() || cleanedContent
+  return {
+    headline: truncate(headlineSource || 'Project idea', 170),
+    typePill,
+  }
 }
 
 export default function Dashboard() {
@@ -444,6 +475,33 @@ export default function Dashboard() {
     }
   }
 
+  const getMostRecentIdea = () => {
+    if (ideas.length === 0) return null
+    return [...ideas].sort((a, b) => {
+      const aTime = new Date(a.created_at || 0).getTime()
+      const bTime = new Date(b.created_at || 0).getTime()
+      if (bTime !== aTime) return bTime - aTime
+      return (b.id || 0) - (a.id || 0)
+    })[0]
+  }
+
+  const handleOpenActiveChat = async () => {
+    if (openingIdeaId) return
+
+    const mostRecentIdea = getMostRecentIdea()
+    if (mostRecentIdea) {
+      await handleOpenIdeaChat(mostRecentIdea)
+      return
+    }
+
+    if (conversation) {
+      setActiveNav('chat')
+      return
+    }
+
+    setActiveNav('new')
+  }
+
   // ── Delete idea ──────────────────────────────────────────────
   const handleDeleteIdea = (idea) => {
     setDeleteError('')
@@ -558,13 +616,19 @@ export default function Dashboard() {
 
   // ── Stop running agents ───────────────────────────────────────
   const handleCancelAgents = async () => {
-    if (!conversation) return
+    if (!conversation) {
+      return { ok: false, error: 'No active conversation found.' }
+    }
+
     try {
       await cancelAgents(conversation.id)
       setDevInProcess(false)
       await fetchTickets(conversation.id)
-    } catch {
-      // non-fatal — UI will reflect updated ticket statuses on next poll
+      return { ok: true }
+    } catch (err) {
+      const error = err?.response?.data?.detail || 'Failed to stop agents. Please try again.'
+      setAgentRunError(error)
+      return { ok: false, error }
     }
   }
 
@@ -647,6 +711,13 @@ export default function Dashboard() {
 
   const charCount = text.length
   const charColor = charCount > MAX_CHARS * 0.9 ? 'rose' : charCount > MAX_CHARS * 0.7 ? 'amber' : 'default'
+  const activeChatAvailable = ideas.length > 0 || !!conversation
+  const activeChatDisabled = !activeChatAvailable || !!openingIdeaId
+  const activeChatTitle = ideas.length > 0
+    ? 'Open most recent idea chat'
+    : conversation
+      ? 'Open active chat'
+      : 'No active chat yet'
   const isDecisionMode =
     activeNav === 'chat' &&
     !!conversation &&
@@ -726,10 +797,10 @@ export default function Dashboard() {
           New
         </button>
         <button
-          className={`bottom-tabs__item ${activeNav === 'chat' ? 'bottom-tabs__item--active' : ''} ${!conversation ? 'bottom-tabs__item--disabled' : ''}`}
-          onClick={() => conversation && setActiveNav('chat')}
-          disabled={!conversation}
-          title={conversation ? 'Open active chat' : 'No active chat yet'}
+          className={`bottom-tabs__item ${activeNav === 'chat' ? 'bottom-tabs__item--active' : ''} ${activeChatDisabled ? 'bottom-tabs__item--disabled' : ''}`}
+          onClick={handleOpenActiveChat}
+          disabled={activeChatDisabled}
+          title={activeChatTitle}
         >
           <span className="material-icons">forum</span>
           Active
@@ -763,10 +834,10 @@ export default function Dashboard() {
           </button>
 
           <button
-            className={`sidebar__item ${activeNav === 'chat' ? 'sidebar__item--active' : ''} ${!conversation ? 'sidebar__item--disabled' : ''}`}
-            onClick={() => conversation && setActiveNav('chat')}
-            disabled={!conversation}
-            title={conversation ? 'Open active chat' : 'No active chat yet'}
+            className={`sidebar__item ${activeNav === 'chat' ? 'sidebar__item--active' : ''} ${activeChatDisabled ? 'sidebar__item--disabled' : ''}`}
+            onClick={handleOpenActiveChat}
+            disabled={activeChatDisabled}
+            title={activeChatTitle}
           >
             <span className="material-icons">forum</span>
             Active Chat
@@ -996,20 +1067,29 @@ export default function Dashboard() {
               <div className="ideas-list">
                 {ideas.map((idea) => {
                   const pill = getIdeaPill(idea, ideaTicketsMap)
+                  const displayMeta = getIdeaDisplayMeta(idea)
                   const isLoading = openingIdeaId === idea.id
                   return (
                     <div key={idea.id} className="idea-card">
                       <div className="idea-card__top">
-                        <span className={`idea-card__status idea-card__status--${pill.color}`}>
-                          {pill.icon && <span className="material-icons">{pill.icon}</span>}
-                          {pill.label}
-                        </span>
+                        <div className="idea-card__pills">
+                          <span className={`idea-card__status idea-card__status--${pill.color}`}>
+                            {pill.icon && <span className="material-icons">{pill.icon}</span>}
+                            {pill.label}
+                          </span>
+                          {displayMeta.typePill && (
+                            <span className={`idea-card__status idea-card__status--${displayMeta.typePill.color}`}>
+                              <span className="material-icons">{displayMeta.typePill.icon}</span>
+                              {displayMeta.typePill.label}
+                            </span>
+                          )}
+                        </div>
                         <div className="idea-card__meta-right">
                           <span className="idea-card__id">#{idea.id}</span>
                           <span className="idea-card__date">{formatDate(idea.created_at)}</span>
                         </div>
                       </div>
-                      <p className="idea-card__content">{truncate(idea.content)}</p>
+                      <p className="idea-card__content">{displayMeta.headline}</p>
                       {ideaTicketsMap[idea.id] && (
                         <DevProgress
                           devInProcess={ideaTicketsMap[idea.id].stillPending > 0}

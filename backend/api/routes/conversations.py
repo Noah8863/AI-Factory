@@ -36,7 +36,7 @@ TASKING_COMPLETE_AGENT_MESSAGE = (
 )
 TASKING_DECLINED_AGENT_MESSAGE = (
     "Sounds good! If you need any additional requirements handled, come back and "
-    "click on the 'Add more requirements' button on the bottom to start chatting "
+    "click on the 'Add Requirements' button on the bottom to start chatting "
     "with me again."
 )
 
@@ -113,6 +113,7 @@ def create_conversation(
 
     # 1. Persist the idea (associated with the logged-in user)
     idea = Idea(content=payload.content, user_id=current_user.id)
+    idea.title = pm_agent.summarize_idea(payload.content)
     db.add(idea)
     db.flush()
 

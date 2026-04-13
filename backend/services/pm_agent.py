@@ -90,6 +90,20 @@ Rules:
 - Keep priority/phase reasonable for each split.
 """
 
+_IDEA_SUMMARY_SYSTEM_PROMPT = """
+You are a concise product summary assistant.
+
+Task:
+- Summarize the user's project idea in one short sentence for a dashboard card.
+
+Rules:
+- 8 to 18 words preferred.
+- Plain text only. No quotes, markdown, bullets, or prefixes.
+- Focus on the product outcome (what is being built), not implementation detail.
+"""
+
+_PROJECT_TYPE_PREFIX_RE = re.compile(r"^\s*\[PROJECT_TYPE:\s*[^\]]+\]\s*", re.IGNORECASE)
+
 
 def _parse_json_object(raw_text: str) -> dict | None:
     idx = raw_text.find("{")
@@ -111,6 +125,10 @@ def _parse_json_object(raw_text: str) -> dict | None:
         except json.JSONDecodeError:
             return None
     return None
+
+
+def _strip_project_type_prefix(text: str) -> str:
+    return _PROJECT_TYPE_PREFIX_RE.sub("", text or "").strip()
 
 
 def split_ticket_for_recovery(ticket_payload: dict, max_parts: int = 3) -> list[dict]:
@@ -295,6 +313,37 @@ def get_initial_message(idea_text: str) -> str:
     raw = _call_llm(history)
     result = parse_agent_reply(raw)
     return result["displayText"]
+
+
+def summarize_idea(idea_text: str) -> str:
+    """
+    Generate a short PM-style summary suitable for idea card headers.
+    Falls back to a cleaned/truncated user prompt when the LLM fails.
+    """
+    cleaned_idea = _strip_project_type_prefix(idea_text)
+    if not cleaned_idea:
+        cleaned_idea = (idea_text or "").strip()
+
+    if not cleaned_idea:
+        return "Project idea"
+
+    try:
+        response = _client.messages.create(
+            model=_MODEL,
+            max_tokens=128,
+            system=_IDEA_SUMMARY_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": cleaned_idea}],
+        )
+        summary = (response.content[0].text or "").strip().strip('"').strip("'")
+        summary = re.sub(r"\s+", " ", summary).strip()
+        if summary:
+            return summary[:255]
+    except Exception as exc:
+        logger.warning("summarize_idea failed, using fallback: %s", exc)
+
+    if len(cleaned_idea) > 200:
+        return f"{cleaned_idea[:197].rstrip()}..."
+    return cleaned_idea
 
 
 def get_pm_response(
