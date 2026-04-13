@@ -14,9 +14,8 @@ class Conversation(Base):
     # Set to True to signal any running background agent task to stop
     cancelled = Column(Boolean, default=False, nullable=False)
     # Project type tags set by the PM agent at ticket-generation time.
-    # Possible values: "has_frontend", "has_backend", "is_script",
-    #                  "is_mobile_app", "is_devops_program"
-    project_tags = Column(JSON, default=list, nullable=True)
+    # Stored as an object keyed by the canonical tag names.
+    project_tags = Column(JSON, default=dict, nullable=True)
     # GitHub repo created when the user first clicks "Start Building"
     github_repo_name = Column(String(255), nullable=True)
     github_repo_url  = Column(String(512), nullable=True)

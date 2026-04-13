@@ -84,7 +84,8 @@ async def run_tasking(
     Returns:
         {
           "agent_reply": str,         # raw display text (not stored in DB directly)
-          "tickets":     dict | None, # full parsed ticket payload from the LLM
+          "tickets": dict | None,     # full parsed ticket payload from the LLM
+          "projectTags": dict | None, # normalized project type tags
         }
 
     GitHub repo creation, Jira project creation, and Jira ticket pushing are
@@ -104,6 +105,7 @@ async def run_tasking(
     return {
         "agent_reply": parsed["displayText"],
         "tickets":     parsed.get("tickets"),
+        "projectTags": parsed.get("projectTags"),
     }
 
 

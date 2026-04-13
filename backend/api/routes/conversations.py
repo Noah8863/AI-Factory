@@ -16,6 +16,7 @@ from schemas.conversation import (
     ConversationDetail,
     ConversationRead,
     TaskingResult,
+    normalize_project_tags,
 )
 from schemas.message import MessageCreate, MessageRead
 from services import pm_agent
@@ -283,8 +284,14 @@ async def start_tasking(
     # Tags are written once on first tasking and never overwritten on re-runs,
     # so the project type stays stable even if more tickets are added later.
     if not conversation.project_tags:
-        project_tags = result.get("projectTags") or []
-        if project_tags:
+        project_tags = normalize_project_tags(result.get("projectTags"), require_any_true=True)
+        if project_tags is None:
+            project_tags = normalize_project_tags(
+                tickets_data.get("projectTags") if isinstance(tickets_data, dict) else None,
+                require_any_true=True,
+            )
+
+        if project_tags is not None:
             conversation.project_tags = project_tags
             logger.info(
                 "Project tags for conversation %s: %s",
