@@ -36,37 +36,63 @@
   --gradient-text: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #22d3ee 100%);
   // Dot-grid color (white dots on dark, dark dots on light)
   --dot-grid-color: rgba(255, 255, 255, 0.04);
+  // Contrast helpers for accents/buttons
+  --accent-readable-text: #a5b4fc;
+  --accent-readable-bg: rgba(99, 102, 241, 0.12);
+  --accent-readable-bg-strong: rgba(99, 102, 241, 0.2);
+  --accent-readable-bg-hover: rgba(99, 102, 241, 0.16);
+  --accent-readable-border: rgba(99, 102, 241, 0.34);
+  --accent-readable-spinner: rgba(165, 180, 252, 0.3);
+  --btn-ghost-bg: transparent;
+  --btn-ghost-text: var(--text-secondary);
+  --btn-ghost-border: var(--border-default);
+  --btn-ghost-hover-bg: var(--bg-elevated);
+  --btn-ghost-hover-text: var(--text-primary);
+  --btn-ghost-hover-border: var(--border-strong);
 }
 
 html[data-theme="light"] {
   // Surfaces
-  --bg-base:     #f2f2ff;
+  --bg-base:     #f4f5ff;
   --bg-surface:  #ffffff;
-  --bg-elevated: #ebebfa;
-  --bg-hover:    #e2e2f5;
+  --bg-elevated: #edf0ff;
+  --bg-hover:    #e6e9fb;
   // Glass / backdrop variants
-  --bg-base-glass:    rgba(242, 242, 255, 0.88);
-  --bg-surface-glass: rgba(255, 255, 255, 0.97);
+  --bg-base-glass:    rgba(244, 245, 255, 0.9);
+  --bg-surface-glass: rgba(255, 255, 255, 0.985);
   // Borders
-  --border-subtle:  rgba(0, 0, 0, 0.06);
-  --border-default: rgba(0, 0, 0, 0.10);
-  --border-strong:  rgba(0, 0, 0, 0.20);
-  --border-accent:  rgba(99, 102, 241, 0.35);
+  --border-subtle:  rgba(25, 28, 50, 0.09);
+  --border-default: rgba(25, 28, 50, 0.15);
+  --border-strong:  rgba(25, 28, 50, 0.25);
+  --border-accent:  rgba(79, 70, 229, 0.42);
   // Text
   --text-primary:   #1a1a2e;
-  --text-secondary: #4a4a70;
-  --text-tertiary:  #8888aa;
+  --text-secondary: #353b62;
+  --text-tertiary:  #606a91;
   // Text alpha variants
-  --text-tertiary-faint:  rgba(80, 80, 120, 0.08);
-  --text-tertiary-faint-b: rgba(80, 80, 120, 0.15);
-  --text-tertiary-subtle:  rgba(80, 80, 120, 0.3);
+  --text-tertiary-faint:  rgba(53, 59, 98, 0.1);
+  --text-tertiary-faint-b: rgba(53, 59, 98, 0.18);
+  --text-tertiary-subtle:  rgba(53, 59, 98, 0.36);
   // Shadows
-  --shadow-card: 0 4px 32px rgba(0, 0, 0, 0.10);
-  --shadow-glow: 0 0 64px rgba(99, 102, 241, 0.08);
+  --shadow-card: 0 6px 30px rgba(22, 24, 45, 0.11);
+  --shadow-glow: 0 0 64px rgba(79, 70, 229, 0.11);
   // Gradient text
   --gradient-text: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #0891b2 100%);
   // Dot-grid color
-  --dot-grid-color: rgba(0, 0, 0, 0.045);
+  --dot-grid-color: rgba(0, 0, 0, 0.06);
+  // Contrast helpers for accents/buttons
+  --accent-readable-text: #3730a3;
+  --accent-readable-bg: rgba(79, 70, 229, 0.13);
+  --accent-readable-bg-strong: rgba(79, 70, 229, 0.2);
+  --accent-readable-bg-hover: rgba(79, 70, 229, 0.23);
+  --accent-readable-border: rgba(79, 70, 229, 0.42);
+  --accent-readable-spinner: rgba(55, 48, 163, 0.3);
+  --btn-ghost-bg: rgba(79, 70, 229, 0.03);
+  --btn-ghost-text: #30365e;
+  --btn-ghost-border: rgba(53, 59, 98, 0.24);
+  --btn-ghost-hover-bg: rgba(79, 70, 229, 0.12);
+  --btn-ghost-hover-text: #1f2550;
+  --btn-ghost-hover-border: rgba(79, 70, 229, 0.42);
 }
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -135,14 +161,14 @@ body {
   }
 
   &--ghost {
-    background: transparent;
-    color: $text-secondary;
-    border: 1px solid $border-default;
+    background: var(--btn-ghost-bg);
+    color: var(--btn-ghost-text);
+    border: 1px solid var(--btn-ghost-border);
 
     &:hover {
-      background: $bg-elevated;
-      color: $text-primary;
-      border-color: $border-strong;
+      background: var(--btn-ghost-hover-bg);
+      color: var(--btn-ghost-hover-text);
+      border-color: var(--btn-ghost-hover-border);
     }
   }
 

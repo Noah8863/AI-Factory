@@ -402,7 +402,7 @@ export default function ChatThread({
       )}
 
       {/* ── Input ──────────────────────────────────────────────── */}
-      {!isTasking && !isDone && (
+      {!isTasking && !isDone && !showReadyBanner && (
         <>
           <div className="chat-thread__composer">
             <div className="chat-thread__composer-meta">

@@ -86,6 +86,10 @@ function getIdeaPill(idea, ideaTicketsMap) {
   if (!data || data.tickets.length === 0) {
     return { label: 'Requirements in Need', icon: null, color: 'rose' }
   }
+  const hasCancelled = data.tickets.some(t => t.status === 'cancelled')
+  if (hasCancelled) {
+    return { label: 'Canceled', icon: 'cancel', color: 'amber' }
+  }
   const hasFailed = data.tickets.some(t => t.status === 'failed')
   if (hasFailed) {
     return { label: 'Failed!', icon: 'cancel', color: 'rose' }

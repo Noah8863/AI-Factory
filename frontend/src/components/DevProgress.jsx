@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import './DevProgress.scss'
 
+function getInitialCollapsed(compact) {
+  if (compact) return false
+  if (typeof window === 'undefined') return false
+  return window.matchMedia('(max-width: 640px)').matches
+}
+
 export default function DevProgress({
   devInProcess,
   agentTickets,
@@ -9,13 +15,14 @@ export default function DevProgress({
   compact = false,
 }) {
   const [expandedErrors, setExpandedErrors] = useState({})
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(() => getInitialCollapsed(compact))
 
   if (!devInProcess && agentTickets.length === 0) return null
 
   const doneCount = agentTickets.filter(t => t.status === 'done').length
   const activeCount = agentTickets.filter(t => t.status === 'in_progress').length
   const failedCount = agentTickets.filter(t => t.status === 'failed').length
+  const cancelledCount = agentTickets.filter(t => t.status === 'cancelled').length
   const pendingCount = agentTickets.filter(t => t.status === 'pending').length
   const rootClass = compact ? 'dev-progress dev-progress--compact' : 'dev-progress'
 
@@ -33,8 +40,10 @@ export default function DevProgress({
             </>
           ) : (
             <>
-              <span className="material-icons dev-progress__done-icon">check_circle</span>
-              <p className="dev-progress__title">Development complete</p>
+              <span className={`material-icons ${cancelledCount > 0 ? 'dev-progress__cancel-icon' : 'dev-progress__done-icon'}`}>
+                {cancelledCount > 0 ? 'cancel' : 'check_circle'}
+              </span>
+              <p className="dev-progress__title">{cancelledCount > 0 ? 'Development canceled' : 'Development complete'}</p>
             </>
           )}
         </div>
@@ -42,6 +51,9 @@ export default function DevProgress({
           {agentTickets.length > 0 && (
             <div className="dev-progress__counts">
               <span>{doneCount}/{agentTickets.length} done</span>
+              {cancelledCount > 0 && (
+                <span className="dev-progress__count-cancelled">{cancelledCount} canceled</span>
+              )}
               {failedCount > 0 && (
                 <span className="dev-progress__count-alert">{failedCount} failed</span>
               )}
@@ -82,6 +94,9 @@ export default function DevProgress({
               <span className="dev-progress__summary-pill dev-progress__summary-pill--done">Done {doneCount}</span>
               <span className="dev-progress__summary-pill dev-progress__summary-pill--active">Active {activeCount}</span>
               <span className="dev-progress__summary-pill dev-progress__summary-pill--pending">Pending {pendingCount}</span>
+              {cancelledCount > 0 && (
+                <span className="dev-progress__summary-pill dev-progress__summary-pill--cancelled">Canceled {cancelledCount}</span>
+              )}
               {failedCount > 0 && (
                 <span className="dev-progress__summary-pill dev-progress__summary-pill--failed">Failed {failedCount}</span>
               )}
@@ -108,11 +123,13 @@ export default function DevProgress({
               ticket.status === 'done'        ? 'check_circle' :
               ticket.status === 'in_progress' ? 'sync' :
               ticket.status === 'failed'      ? 'error' :
+              ticket.status === 'cancelled'   ? 'cancel' :
                                                 'schedule'
             const statusClass =
               ticket.status === 'done'        ? 'done' :
               ticket.status === 'in_progress' ? 'active' :
               ticket.status === 'failed'      ? 'failed' :
+              ticket.status === 'cancelled'   ? 'cancelled' :
                                                 'pending'
             const isExpanded = !!expandedErrors[ticket.id]
             const hasFailed = ticket.status === 'failed' && ticket.error_msg
@@ -125,7 +142,7 @@ export default function DevProgress({
                   <span className="dev-progress__ticket-id">{ticket.ticket_id}</span>
                   <span className="dev-progress__ticket-title">{ticket.title}</span>
                   <span className={`dev-progress__ticket-badge dev-progress__ticket-badge--${statusClass}`}>
-                    {ticket.status === 'in_progress' ? 'building' : ticket.status}
+                    {ticket.status === 'in_progress' ? 'building' : ticket.status === 'cancelled' ? 'canceled' : ticket.status}
                   </span>
                   {hasFailed && (
                     <>

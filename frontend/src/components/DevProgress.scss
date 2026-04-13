@@ -96,6 +96,11 @@
     color: $emerald;
   }
 
+  &__cancel-icon {
+    font-size: 18px;
+    color: $amber;
+  }
+
   &__title {
     font-size: 0.8125rem;
     font-weight: 700;
@@ -132,6 +137,10 @@
 
   &__count-alert {
     color: $rose;
+  }
+
+  &__count-cancelled {
+    color: $amber;
   }
 
   &__refresh {
@@ -219,6 +228,12 @@
       color: $rose;
       background: rgba($rose, 0.1);
       border-color: rgba($rose, 0.24);
+    }
+
+    &--cancelled {
+      color: $amber;
+      background: rgba($amber, 0.12);
+      border-color: rgba($amber, 0.28);
     }
   }
 
@@ -332,6 +347,11 @@
       background: rgba($rose, 0.05);
       border-color: rgba($rose, 0.18);
     }
+
+    &--cancelled {
+      background: rgba($amber, 0.08);
+      border-color: rgba($amber, 0.24);
+    }
   }
 
   &__ticket-row {
@@ -354,6 +374,7 @@
     &--done    { color: $emerald; }
     &--active  { color: $indigo; animation: spin 1.2s linear infinite; }
     &--failed  { color: $rose; }
+    &--cancelled { color: $amber; }
     &--pending { color: $text-tertiary; }
   }
 
@@ -392,6 +413,7 @@
     &--done    { color: $emerald; background: rgba($emerald, 0.12); }
     &--active  { color: $indigo;  background: rgba($indigo, 0.12); }
     &--failed  { color: $rose;    background: rgba($rose, 0.1); }
+    &--cancelled { color: $amber; background: rgba($amber, 0.12); }
     &--pending { color: $text-tertiary; background: rgba($text-tertiary, 0.1); }
   }
 

@@ -141,12 +141,12 @@
     }
 
     &--active {
-      background: rgba($indigo, 0.12);
-      color: #a5b4fc;
+      background: var(--accent-readable-bg);
+      color: var(--accent-readable-text);
 
       .material-icons { color: $indigo; }
 
-      &:hover { background: rgba($indigo, 0.16); }
+      &:hover { background: var(--accent-readable-bg-hover); }
     }
 
     &--disabled {
@@ -176,8 +176,8 @@
     min-width: 20px;
     height: 20px;
     padding: 0 6px;
-    background: rgba($indigo, 0.2);
-    color: #a5b4fc;
+    background: var(--accent-readable-bg-strong);
+    color: var(--accent-readable-text);
     border-radius: $radius-full;
     font-size: 0.6875rem;
     font-weight: 700;
@@ -480,9 +480,9 @@
   .material-icons { font-size: 14px; }
 
   &:hover {
-    background: rgba($indigo, 0.1);
-    border-color: $border-accent;
-    color: #a5b4fc;
+    background: var(--accent-readable-bg);
+    border-color: var(--accent-readable-border);
+    color: var(--accent-readable-text);
   }
 
   &:disabled {
@@ -992,13 +992,13 @@
     .material-icons { font-size: 15px; }
 
     &--open {
-      background: rgba($indigo, 0.08);
-      border-color: rgba($indigo, 0.25);
-      color: #a5b4fc;
+      background: var(--accent-readable-bg);
+      border-color: var(--accent-readable-border);
+      color: var(--accent-readable-text);
 
       &:hover:not(:disabled) {
-        background: rgba($indigo, 0.16);
-        border-color: rgba($indigo, 0.4);
+        background: var(--accent-readable-bg-hover);
+        border-color: var(--accent-readable-border);
       }
 
       &:disabled {
@@ -1033,8 +1033,8 @@
   &__spinner {
     width: 12px;
     height: 12px;
-    border: 2px solid rgba(#a5b4fc, 0.3);
-    border-top-color: #a5b4fc;
+    border: 2px solid var(--accent-readable-spinner);
+    border-top-color: var(--accent-readable-text);
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
     flex-shrink: 0;
