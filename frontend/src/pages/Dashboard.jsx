@@ -218,6 +218,13 @@ export default function Dashboard() {
     }
   }, [])
 
+  // ── Poll ticket status while agents are running ──────────────
+  useEffect(() => {
+    if (!devInProcess || !conversation?.id) return
+    const interval = setInterval(() => fetchTickets(conversation.id), 1000)
+    return () => clearInterval(interval)
+  }, [devInProcess, conversation?.id, fetchTickets])
+
 
   // ── Fetch tickets for all ideas (My Ideas page) ─────────────
   const fetchAllIdeaTickets = useCallback(async (ideaList) => {

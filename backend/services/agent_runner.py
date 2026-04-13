@@ -444,63 +444,82 @@ async def run_all_tickets(
         conversation_id, done_count, fail_count, still_pending,
     )
 
-    # ── Post-completion: CI/CD + README (only when every ticket is done) ─────
+    # ── Post-completion: Netlify deployment + README (only when every ticket is done) ─────
     if still_pending == 0 and all_failed == 0 and conversation.github_repo_name:
         import os
-        from services.github_service import deploy_ci_workflow, write_file_to_repo
+        from services.github_service import write_file_to_repo
 
         repo     = conversation.github_repo_name
         org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
 
-        # GitHub Pages URL is deterministic: https://<org>.github.io/<repo>/
-        # We know this before the workflow runs, so we can embed it in the README.
-        live_url = f"https://{org_name}.github.io/{repo}/"
-
-        # 1. Deploy GitHub Actions CI/CD workflow
         # Derive project type from the PM-assigned tags stored on the conversation.
         # Fall back to inspecting ticket types for older rows that pre-date tagging.
         project_tags: dict[str, bool] = conversation.project_tags or {}
         if project_tags:
-            has_frontend          = project_tags.get("has_frontend",          False)
-            has_backend           = project_tags.get("has_backend",           False)
-            is_script             = project_tags.get("is_script",             False)
-            is_mobile_app         = project_tags.get("is_mobile_app",         False)
-            is_devops_program     = project_tags.get("is_devops_program",     False)
-            is_full_stack         = project_tags.get("is_full_stack",         False)
-            has_mixed_technologies = project_tags.get("has_mixed_technologies", False)
+            has_frontend           = project_tags.get("has_frontend",           False)
+            has_backend            = project_tags.get("has_backend",            False)
+            is_script              = project_tags.get("is_script",              False)
+            is_mobile_app          = project_tags.get("is_mobile_app",          False)
+            is_devops_program      = project_tags.get("is_devops_program",      False)
+            is_full_stack          = project_tags.get("is_full_stack",          False)
+            has_mixed_technologies = project_tags.get("has_mixed_technologies",  False)
         else:
             # Legacy fallback: derive from ticket types
-            has_frontend          = any(t.type == "frontend" for t in all_tickets)
-            has_backend           = any(t.type == "backend"  for t in all_tickets)
-            is_script             = False
-            is_mobile_app         = False
-            is_devops_program     = False
-            is_full_stack         = has_frontend and has_backend
+            has_frontend           = any(t.type == "frontend" for t in all_tickets)
+            has_backend            = any(t.type == "backend"  for t in all_tickets)
+            is_script              = False
+            is_mobile_app          = False
+            is_devops_program      = False
+            is_full_stack          = has_frontend and has_backend
             has_mixed_technologies = False
 
         logger.info(
-            "All tickets done for conversation %s — deploying CI/CD workflow to %s "
+            "All tickets done for conversation %s — running post-completion steps for %s "
             "(has_frontend=%s, has_backend=%s, is_full_stack=%s, is_script=%s, "
             "is_mobile_app=%s, is_devops_program=%s, has_mixed_technologies=%s).",
             conversation_id, repo,
             has_frontend, has_backend, is_full_stack,
             is_script, is_mobile_app, is_devops_program, has_mixed_technologies,
         )
-        try:
-            ok = deploy_ci_workflow(repo, has_frontend=has_frontend)
-            if ok:
-                logger.info("CI/CD workflow deployed to %s.", repo)
-            else:
-                logger.warning(
-                    "deploy_ci_workflow returned False for %s.", repo,
+
+        # 1. Deploy to Netlify (frontend / full-stack projects only).
+        # For backend-only, scripts, and DevOps projects there is nothing to deploy
+        # to a static host, so we skip this step entirely.
+        live_url: str | None = None
+        if has_frontend:
+            try:
+                from services.netlify_service import create_netlify_site
+
+                repo_full_name = f"{org_name}/{repo}"
+
+                netlify_result = create_netlify_site(
+                    site_name=repo,
+                    repo_full_name=repo_full_name,
+                    is_full_stack=is_full_stack,
                 )
-        except Exception as exc:
-            logger.exception(
-                "Failed to deploy CI/CD workflow for %s: %s", repo, exc,
+                if netlify_result:
+                    live_url = netlify_result["site_url"]
+                    logger.info(
+                        "Netlify site configured for %s → %s", repo, live_url,
+                    )
+                else:
+                    logger.warning(
+                        "Netlify site creation returned None for %s — "
+                        "README will omit the live URL.",
+                        repo,
+                    )
+            except Exception as exc:
+                logger.exception(
+                    "Failed to create Netlify site for %s: %s", repo, exc,
+                )
+        else:
+            logger.info(
+                "No frontend for %s (has_frontend=False) — skipping Netlify deployment.",
+                repo,
             )
 
-        # 2. Generate and commit a README.md from the chat history
-        # Build history and project_name here so the CLAUDE.md block below can also use them.
+        # 2. Generate and commit a README.md from the chat history.
+        # Build history and project_name here so the CLAUDE.md block below can reuse them.
         from models.message import Message
 
         msgs = (
