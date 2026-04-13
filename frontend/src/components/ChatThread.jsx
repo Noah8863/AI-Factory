@@ -130,6 +130,13 @@ export default function ChatThread({
   const isDone    = status === 'done'
   const isJiraBlocked = jiraStatus !== 'connected' || !jiraProjectSelected
   const projectTypeLabel = getProjectTypeLabel(projectTags)
+  const composerHint = sessionExpired
+    ? 'Session expired'
+    : isJiraBlocked
+      ? (jiraStatus !== 'connected' ? 'Connect Jira in Profile' : 'Select a Jira project in Profile')
+      : isSending
+        ? 'Sending message...'
+        : 'Shift+Enter for newline'
 
   // Cycling phrase state for the loading overlay
   const [phraseIndex, setPhraseIndex] = useState(0)
@@ -397,29 +404,37 @@ export default function ChatThread({
       {/* ── Input ──────────────────────────────────────────────── */}
       {!isTasking && !isDone && (
         <>
-          <div className="chat-thread__input-bar">
-            <textarea
-              ref={inputRef}
-              className="chat-thread__input"
-              placeholder={
-                sessionExpired  ? 'Session expired — redirecting…' :
-                isJiraBlocked   ? (jiraStatus !== 'connected' ? 'Connect Jira to continue chatting' : 'Select a Jira project to continue') :
-                'Reply to the PM agent…'
-              }
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={1}
-              disabled={isSending || isJiraBlocked || sessionExpired}
-            />
-            <button
-              className="chat-thread__send"
-              onClick={handleSend}
-              disabled={isJiraBlocked || sessionExpired || !input.trim() || isSending}
-              aria-label="Send message"
-            >
-              <span className="material-icons">send</span>
-            </button>
+          <div className="chat-thread__composer">
+            <div className="chat-thread__composer-meta">
+              <p className="chat-thread__composer-label">Message Composer</p>
+              <p className={`chat-thread__composer-hint ${isJiraBlocked || sessionExpired ? 'chat-thread__composer-hint--warn' : ''}`}>
+                {composerHint}
+              </p>
+            </div>
+            <div className="chat-thread__input-bar">
+              <textarea
+                ref={inputRef}
+                className="chat-thread__input"
+                placeholder={
+                  sessionExpired  ? 'Session expired — redirecting…' :
+                  isJiraBlocked   ? (jiraStatus !== 'connected' ? 'Connect Jira to continue chatting' : 'Select a Jira project to continue') :
+                  'Reply to the PM agent…'
+                }
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                disabled={isSending || isJiraBlocked || sessionExpired}
+              />
+              <button
+                className="chat-thread__send"
+                onClick={handleSend}
+                disabled={isJiraBlocked || sessionExpired || !input.trim() || isSending}
+                aria-label="Send message"
+              >
+                <span className="material-icons">send</span>
+              </button>
+            </div>
           </div>
         </>
       )}

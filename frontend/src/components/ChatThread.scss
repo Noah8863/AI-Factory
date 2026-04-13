@@ -257,7 +257,7 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  max-width: 75%;
+  max-width: min(75%, 880px);
   animation: fadeUp 0.25s $ease-out both;
 
   @media (max-width: 640px) { max-width: 90%; }
@@ -588,6 +588,14 @@
     padding: 10px 20px 6px;
   }
 
+  &__header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
   &__title-row {
     display: flex;
     align-items: center;
@@ -649,6 +657,10 @@
     letter-spacing: 0.02em;
   }
 
+  &__count-alert {
+    color: $rose;
+  }
+
   &__refresh {
     display: inline-flex;
     align-items: center;
@@ -688,6 +700,53 @@
     background: $gradient-brand;
     border-radius: 2px;
     transition: width 0.6s $ease-out;
+  }
+
+  &__summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 2px 20px 10px;
+
+    @media (max-width: 640px) {
+      padding: 2px 10px 10px;
+      gap: 5px;
+    }
+  }
+
+  &__summary-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: $radius-full;
+    padding: 2px 9px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    border: 1px solid transparent;
+
+    &--done {
+      color: $emerald;
+      background: rgba($emerald, 0.1);
+      border-color: rgba($emerald, 0.24);
+    }
+
+    &--active {
+      color: $indigo;
+      background: rgba($indigo, 0.1);
+      border-color: rgba($indigo, 0.24);
+    }
+
+    &--pending {
+      color: $text-secondary;
+      background: rgba($text-tertiary, 0.1);
+      border-color: rgba($text-tertiary, 0.2);
+    }
+
+    &--failed {
+      color: $rose;
+      background: rgba($rose, 0.1);
+      border-color: rgba($rose, 0.24);
+    }
   }
 
   // Loading skeleton
@@ -762,7 +821,7 @@
   &__list {
     list-style: none;
     margin: 0;
-    padding: 0 16px 10px;
+    padding: 2px 16px 10px;
     max-height: 200px;
     overflow-y: auto;
     overflow-x: hidden;
@@ -776,17 +835,29 @@
   &__ticket {
     display: flex;
     flex-direction: column;
-    padding: 5px 6px;
+    padding: 7px 8px;
     border-radius: $radius-sm;
     font-size: 0.75rem;
     min-width: 0;
+    border: 1px solid transparent;
+
+    & + & {
+      margin-top: 4px;
+    }
+
+    &--done {
+      background: rgba($emerald, 0.05);
+      border-color: rgba($emerald, 0.16);
+    }
 
     &--active {
       background: rgba($indigo, 0.08);
+      border-color: rgba($indigo, 0.22);
     }
 
     &--failed {
       background: rgba($rose, 0.05);
+      border-color: rgba($rose, 0.18);
     }
   }
 
@@ -1200,13 +1271,61 @@
 
 // ─── Input bar ────────────────────────────────────────────────────────────────
 
+.chat-thread__composer {
+  border-top: 1px solid $border-subtle;
+  background: $bg-surface;
+  padding: 8px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+
+  @media (max-width: 640px) {
+    padding: 8px 12px 12px;
+    gap: 6px;
+  }
+}
+
+.chat-thread__composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.chat-thread__composer-label {
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $text-tertiary;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chat-thread__composer-hint {
+  font-size: 0.75rem;
+  color: $text-secondary;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &--warn {
+    color: $amber;
+    font-weight: 600;
+  }
+}
+
 .chat-thread__input-bar {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 14px 16px;
-  border-top: 1px solid $border-subtle;
-  background: $bg-surface;
+  padding: 0;
+  border-top: none;
+  background: transparent;
+  width: min(100%, 980px);
+  margin: 0 auto;
   flex-shrink: 0;
 }
 

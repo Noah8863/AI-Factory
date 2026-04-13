@@ -14,6 +14,9 @@ export default function DevProgress({
   if (!devInProcess && agentTickets.length === 0) return null
 
   const doneCount = agentTickets.filter(t => t.status === 'done').length
+  const activeCount = agentTickets.filter(t => t.status === 'in_progress').length
+  const failedCount = agentTickets.filter(t => t.status === 'failed').length
+  const pendingCount = agentTickets.filter(t => t.status === 'pending').length
   const rootClass = compact ? 'dev-progress dev-progress--compact' : 'dev-progress'
 
   return (
@@ -37,14 +40,17 @@ export default function DevProgress({
         </div>
         <div className="dev-progress__header-right">
           {agentTickets.length > 0 && (
-            <p className="dev-progress__counts">
-              {doneCount}/{agentTickets.length} tickets done
-              {onRefreshTickets && (
-                <button className="dev-progress__refresh" onClick={onRefreshTickets} title="Refresh ticket status">
-                  <span className="material-icons">refresh</span>
-                </button>
+            <div className="dev-progress__counts">
+              <span>{doneCount}/{agentTickets.length} done</span>
+              {failedCount > 0 && (
+                <span className="dev-progress__count-alert">{failedCount} failed</span>
               )}
-            </p>
+            </div>
+          )}
+          {onRefreshTickets && (
+            <button className="dev-progress__refresh" onClick={onRefreshTickets} title="Refresh ticket status">
+              <span className="material-icons">refresh</span>
+            </button>
           )}
           {!compact && (
             <button
@@ -69,6 +75,16 @@ export default function DevProgress({
                   width: `${(doneCount / agentTickets.length) * 100}%`,
                 }}
               />
+            </div>
+          )}
+          {agentTickets.length > 0 && (
+            <div className="dev-progress__summary">
+              <span className="dev-progress__summary-pill dev-progress__summary-pill--done">Done {doneCount}</span>
+              <span className="dev-progress__summary-pill dev-progress__summary-pill--active">Active {activeCount}</span>
+              <span className="dev-progress__summary-pill dev-progress__summary-pill--pending">Pending {pendingCount}</span>
+              {failedCount > 0 && (
+                <span className="dev-progress__summary-pill dev-progress__summary-pill--failed">Failed {failedCount}</span>
+              )}
             </div>
           )}
           {/* Skeleton while tickets haven't loaded yet */}

@@ -43,6 +43,8 @@
     display: flex;
     align-items: center;
     gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   &__collapse {
@@ -128,6 +130,10 @@
     letter-spacing: 0.02em;
   }
 
+  &__count-alert {
+    color: $rose;
+  }
+
   &__refresh {
     display: inline-flex;
     align-items: center;
@@ -167,6 +173,53 @@
     background: $gradient-brand;
     border-radius: 2px;
     transition: width 0.6s $ease-out;
+  }
+
+  &__summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 2px 20px 10px;
+
+    @media (max-width: 640px) {
+      padding: 2px 10px 10px;
+      gap: 5px;
+    }
+  }
+
+  &__summary-pill {
+    display: inline-flex;
+    align-items: center;
+    border-radius: $radius-full;
+    padding: 2px 9px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    border: 1px solid transparent;
+
+    &--done {
+      color: $emerald;
+      background: rgba($emerald, 0.1);
+      border-color: rgba($emerald, 0.24);
+    }
+
+    &--active {
+      color: $indigo;
+      background: rgba($indigo, 0.1);
+      border-color: rgba($indigo, 0.24);
+    }
+
+    &--pending {
+      color: $text-secondary;
+      background: rgba($text-tertiary, 0.1);
+      border-color: rgba($text-tertiary, 0.2);
+    }
+
+    &--failed {
+      color: $rose;
+      background: rgba($rose, 0.1);
+      border-color: rgba($rose, 0.24);
+    }
   }
 
   // Loading skeleton
@@ -241,7 +294,7 @@
   &__list {
     list-style: none;
     margin: 0;
-    padding: 0 16px 10px;
+    padding: 2px 16px 10px;
     max-height: 200px;
     overflow-y: auto;
     overflow-x: hidden;
@@ -255,17 +308,29 @@
   &__ticket {
     display: flex;
     flex-direction: column;
-    padding: 5px 6px;
+    padding: 7px 8px;
     border-radius: $radius-sm;
     font-size: 0.75rem;
     min-width: 0;
+    border: 1px solid transparent;
+
+    & + & {
+      margin-top: 4px;
+    }
+
+    &--done {
+      background: rgba($emerald, 0.05);
+      border-color: rgba($emerald, 0.16);
+    }
 
     &--active {
       background: rgba($indigo, 0.08);
+      border-color: rgba($indigo, 0.22);
     }
 
     &--failed {
       background: rgba($rose, 0.05);
+      border-color: rgba($rose, 0.18);
     }
   }
 

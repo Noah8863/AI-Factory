@@ -342,10 +342,20 @@
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
+    align-items: center;
     min-width: 0;
 
     @media (max-width: 640px) {
       padding: 64px 0 calc(70px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .chat-thread {
+      width: min(100%, 1240px);
+      margin-inline: auto;
+
+      @media (max-width: 640px) {
+        width: 100%;
+      }
     }
   }
 }
@@ -354,8 +364,9 @@
 
 .idea-panel,
 .history-panel {
-  max-width: 820px;
+  max-width: 920px;
   width: 100%;
+  margin-inline: auto;
 
   @media (max-width: 640px) {
     max-width: 100%;

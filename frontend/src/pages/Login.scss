@@ -7,9 +7,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: clamp(16px, 3.2vw, 40px);
   background: $bg-base;
-  overflow: hidden;
+  overflow-x: hidden;
 
   &__bg { position: absolute; inset: 0; pointer-events: none; }
 
@@ -49,11 +49,11 @@
 .login-card {
   position: relative;
   width: 100%;
-  max-width: 420px;
+  max-width: 460px;
   background: $bg-surface;
   border: 1px solid $border-default;
   border-radius: $radius-xl;
-  padding: 40px;
+  padding: clamp(24px, 3.2vw, 40px);
   box-shadow: $shadow-card, $shadow-glow;
   animation: fadeUp 0.6s $ease-out both;
 
