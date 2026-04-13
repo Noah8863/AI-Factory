@@ -47,6 +47,9 @@ with engine.connect() as _conn:
     _conn.execute(text(
         "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS cancelled BOOLEAN NOT NULL DEFAULT FALSE"
     ))
+    _conn.execute(text(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_tags JSON"
+    ))
     _conn.commit()
 logger.info("Column migrations applied")
 

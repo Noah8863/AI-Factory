@@ -33,12 +33,14 @@ every item maps to a specific gap found in the code.
     Ownership is checked via Idea.user_id join (Conversation.user_id is not always set).
     Documented in CLAUDE.md §21.
 
-[ ] ALTER TABLE guard for project_tags column
-    backend/main.py — The project_tags JSON column is defined in the Conversation
-    model but is NOT guarded in the ALTER TABLE block at startup. Existing Railway
-    PostgreSQL databases will not have the column and will silently fail when the
-    app tries to read or write tags. Add:
-      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_tags TEXT;
+[x] ALTER TABLE guard for project_tags column
+    backend/main.py — Added ALTER TABLE guard:
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_tags JSON
+    Also fixed Conversation creation in conversations.py to always populate user_id
+    (was always null, forcing the Idea-join ownership check on every auth route).
+    Frontend: projectTags flows Dashboard → ChatThread as a prop; a project-type
+    badge (Full-Stack / Backend API / Script / etc.) appears in the chat header
+    once the PM agent has stamped tags after tasking.
 
 ────────────────────────────────────────────────────────────────────────────────
  HIGH — PM Agent Behavior & Quality

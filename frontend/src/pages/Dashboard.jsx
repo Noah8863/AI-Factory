@@ -709,6 +709,7 @@ export default function Dashboard() {
           <ChatThread
             messages={messages}
             status={conversation.status}
+            projectTags={conversation.project_tags ?? null}
             isSending={isSending}
             sendError={sendError}
             showReadyBanner={showReadyBanner}

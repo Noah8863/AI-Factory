@@ -69,6 +69,23 @@ function TypingIndicator() {
   )
 }
 
+const PROJECT_TYPE_LABELS = [
+  { key: 'is_mobile_app',       label: 'Mobile App',     icon: 'smartphone' },
+  { key: 'is_devops_program',   label: 'DevOps',         icon: 'build' },
+  { key: 'is_script',           label: 'Script / CLI',   icon: 'terminal' },
+  { key: 'is_full_stack',       label: 'Full-Stack',     icon: 'layers' },
+  { key: 'has_frontend',        label: 'Frontend',       icon: 'web' },
+  { key: 'has_backend',         label: 'Backend API',    icon: 'dns' },
+]
+
+function getProjectTypeLabel(tags) {
+  if (!tags) return null
+  for (const { key, label, icon } of PROJECT_TYPE_LABELS) {
+    if (tags[key]) return { label, icon }
+  }
+  return null
+}
+
 const TASKING_PHRASES = [
   'Analyzing Requirements',
   'Defining Scope',
@@ -80,6 +97,7 @@ const TASKING_PHRASES = [
 export default function ChatThread({
   messages,
   status,
+  projectTags,
   jiraStatus,
   jiraProjectSelected,
   jiraRequiredMessage,
@@ -111,6 +129,7 @@ export default function ChatThread({
   const isTasking = status === 'tasking'
   const isDone    = status === 'done'
   const isJiraBlocked = jiraStatus !== 'connected' || !jiraProjectSelected
+  const projectTypeLabel = getProjectTypeLabel(projectTags)
 
   // Cycling phrase state for the loading overlay
   const [phraseIndex, setPhraseIndex] = useState(0)
@@ -194,6 +213,12 @@ export default function ChatThread({
         </div>
         <div className="chat-thread__header-controls">
           <ConnectionStatus />
+          {projectTypeLabel && (
+            <div className="chat-thread__header-badge">
+              <span className="material-icons">{projectTypeLabel.icon}</span>
+              {projectTypeLabel.label}
+            </div>
+          )}
           <div className="chat-thread__header-badge">
             <span className="material-icons">forum</span>
             {messages.length} messages

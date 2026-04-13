@@ -116,7 +116,7 @@ def create_conversation(
     db.flush()
 
     # 2. Open a conversation
-    conversation = Conversation(idea_id=idea.id)
+    conversation = Conversation(idea_id=idea.id, user_id=current_user.id)
     db.add(conversation)
     db.flush()
 
