@@ -408,7 +408,7 @@ async def _create_single_ticket(
     Create a single Jira issue.  Returns {"id": ..., "key": ..., "url": ...}.
 
     ticket fields expected (from PM agent JSON):
-        id, title, description, priority, labels, type (backend | frontend)
+        id, title, description, priority, labels, type (backend | frontend | script)
     """
     url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/issue"
 
@@ -571,7 +571,7 @@ async def fetch_project_tickets(
     db:          Session,
     project_key: str,
     cloud_id:    str | None = None,
-    ticket_type: str | None = None,   # "backend" | "frontend" | None (all)
+    ticket_type: str | None = None,   # "backend" | "frontend" | "script" | None (all)
 ) -> list[dict]:
     """
     Fetch Jira issues from a project via JQL, optionally filtered by type label.

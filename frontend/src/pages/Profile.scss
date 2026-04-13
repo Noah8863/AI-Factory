@@ -567,7 +567,14 @@
 
     @media (max-width: 520px) {
       width: 100%;
-      padding-left: 54px;
+      padding-left: 0;
+      margin-left: 54px;
+      flex-wrap: wrap;
+      row-gap: 8px;
+    }
+
+    @media (max-width: 420px) {
+      margin-left: 0;
     }
   }
 }
@@ -583,6 +590,11 @@
   font-size: 0.8125rem;
   font-weight: 500;
   white-space: nowrap;
+
+  @media (max-width: 420px) {
+    white-space: normal;
+    line-height: 1.25;
+  }
 
   .material-icons { font-size: 14px; }
 
@@ -630,6 +642,10 @@
   font-family: inherit;
   transition: $transition;
   white-space: nowrap;
+
+  @media (max-width: 420px) {
+    white-space: normal;
+  }
 
   .material-icons { font-size: 15px; }
 

@@ -20,14 +20,14 @@ class Ticket(Base):
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
 
     # PM-assigned identifiers
-    ticket_id       = Column(String(16),  nullable=False)   # "BE-1", "FE-3"
+    ticket_id       = Column(String(16),  nullable=False)   # "BE-1", "FE-3", "SC-2"
     jira_issue_key  = Column(String(32),  nullable=True)    # "MYAPP-5" (from Jira API response)
 
     # Routing & ordering
-    type            = Column(String(16),  nullable=False)   # "backend" | "frontend"
+    type            = Column(String(16),  nullable=False)   # "backend" | "frontend" | "script"
     phase           = Column(String(32),  nullable=True)    # Foundation|Core|Integration|Polish
     sequence        = Column(Integer,     nullable=True)
-    depends_on      = Column(JSON,        default=list)     # ["BE-1", "FE-2"]
+    depends_on      = Column(JSON,        default=list)     # ["BE-1", "FE-2", "SC-1"]
     priority        = Column(String(16),  nullable=True)    # High|Medium|Low
 
     # Content

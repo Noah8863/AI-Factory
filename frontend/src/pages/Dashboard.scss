@@ -816,6 +816,19 @@
   }
 }
 
+@media (hover: none) and (pointer: coarse) {
+  .type-chip:not(.type-chip--active) {
+    background: $bg-surface !important;
+    border-color: $border-default !important;
+    color: $text-secondary !important;
+    box-shadow: none !important;
+  }
+
+  .type-chip:not(.type-chip--active) .material-icons {
+    color: $text-tertiary !important;
+  }
+}
+
 // ─── Error ───────────────────────────────────────────────────────────────────
 
 .idea-panel__error {

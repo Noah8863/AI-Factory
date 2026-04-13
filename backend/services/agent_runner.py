@@ -156,7 +156,7 @@ def get_runnable_tickets(
 ) -> list[Ticket]:
     """
     Return pending tickets whose dependencies are all satisfied, ordered by
-    sequence (nulls last).  If ticket_type is given ('backend' | 'frontend'),
+    sequence (nulls last).  If ticket_type is given ('backend' | 'frontend' | 'script'),
     only tickets of that type are returned.
     """
     q = (
@@ -487,6 +487,7 @@ async def run_ticket(
     # Import here to avoid circular imports at module load time
     from services import backend_agent as be_svc
     from services import frontend_agent as fe_svc
+    from services import script_agent as sc_svc
     from services.jira_service import transition_jira_issue
 
     ticket = db.get(Ticket, ticket_db_id)
@@ -548,6 +549,16 @@ async def run_ticket(
         )
 
     repo_name = conversation.github_repo_name or ""
+    project_tags = conversation.project_tags or {}
+    effective_ticket_type = "script" if project_tags.get("is_script", False) else ticket.type
+
+    if effective_ticket_type != ticket.type:
+        logger.info(
+            "Ticket %s type overridden from %s to %s due project tags.",
+            ticket.ticket_id,
+            ticket.type,
+            effective_ticket_type,
+        )
 
     # Build a rich prompt from ticket metadata
     deps_str = ", ".join(ticket.depends_on) if ticket.depends_on else "none"
@@ -562,7 +573,7 @@ async def run_ticket(
     )
 
     try:
-        if ticket.type == "backend":
+        if effective_ticket_type == "backend":
             logger.info(
                 "Dispatching ticket %s to BACKEND agent (repo=%s).",
                 ticket.ticket_id, repo_name,
@@ -572,15 +583,29 @@ async def run_ticket(
                 ticket_prompt=ticket_prompt,
                 repo_name=repo_name,
             )
-        else:
+        elif effective_ticket_type == "frontend":
             logger.info(
                 "Dispatching ticket %s to FRONTEND agent (type=%s, repo=%s).",
-                ticket.ticket_id, ticket.type, repo_name,
+                ticket.ticket_id, effective_ticket_type, repo_name,
             )
             result = await fe_svc.run_frontend_task(
                 ticket=ticket,
                 ticket_prompt=ticket_prompt,
                 repo_name=repo_name,
+            )
+        elif effective_ticket_type == "script":
+            logger.info(
+                "Dispatching ticket %s to SCRIPT agent (repo=%s).",
+                ticket.ticket_id, repo_name,
+            )
+            result = await sc_svc.run_script_task(
+                ticket=ticket,
+                ticket_prompt=ticket_prompt,
+                repo_name=repo_name,
+            )
+        else:
+            raise RuntimeError(
+                f"Unsupported ticket type '{effective_ticket_type}' for ticket {ticket.ticket_id}."
             )
 
         # ── Post-agent cancellation check ─────────────────────────────────────
@@ -782,7 +807,7 @@ async def run_all_tickets(
             # Legacy fallback: derive from ticket types
             has_frontend           = any(t.type == "frontend" for t in all_tickets)
             has_backend            = any(t.type == "backend"  for t in all_tickets)
-            is_script              = False
+            is_script              = any(t.type == "script" for t in all_tickets)
             is_mobile_app          = False
             is_devops_program      = False
             is_full_stack          = has_frontend and has_backend

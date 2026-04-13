@@ -7,6 +7,16 @@ import './Profile.scss'
 
 const DASHBOARD_NAV_KEY = 'aif_dashboard_nav'
 
+function isPlaceholderJiraProject(project) {
+  const key = (project?.key || '').trim().toLowerCase()
+  const name = (project?.name || '').trim().toLowerCase()
+
+  if (key === 'sam1') return true
+  if (name.includes('(example)')) return true
+  if (name.includes(' example')) return true
+  return false
+}
+
 export default function Profile() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('aif_user') || 'null')
@@ -51,9 +61,12 @@ export default function Profile() {
     setLoadingProjects(true)
     api.get('/auth/jira/projects')
       .then(res => {
-        setJiraProjects(res.data.projects || [])
+        const filteredProjects = (res.data.projects || []).filter((p) => !isPlaceholderJiraProject(p))
+        setJiraProjects(filteredProjects)
         setJiraCloudId(res.data.cloud_id || '')
-        setSelectedProject(res.data.selected_project_key || '')
+        const selectedKey = res.data.selected_project_key || ''
+        const selectedExists = filteredProjects.some((p) => p.key === selectedKey)
+        setSelectedProject(selectedExists ? selectedKey : '')
       })
       .catch(() => {})
       .finally(() => setLoadingProjects(false))

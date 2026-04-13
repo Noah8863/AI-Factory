@@ -38,6 +38,8 @@ _TAG_KEYS = (
     "has_mixed_technologies",
 )
 
+_ALLOWED_TICKET_TYPES = {"backend", "frontend", "script"}
+
 _OVERSIZED_DESCRIPTION_CHARS = 1300
 _OVERSIZED_TICKET_RE = re.compile(
     r"\b(polish|finalize|complete\s+all|end[-\s]?to[-\s]?end|entire\s+app|whole\s+app|everything\s+left)\b",
@@ -284,6 +286,65 @@ def _rebalance_ticket_payload(original_payload: dict) -> dict | None:
     return None
 
 
+def _normalize_ticket_type(value: str | None) -> str:
+    lowered = (value or "").strip().lower()
+    return lowered if lowered in _ALLOWED_TICKET_TYPES else ""
+
+
+def _coerce_ticket_types_for_project(
+    tickets_payload: dict,
+    tags: dict[str, bool],
+) -> None:
+    ticket_rows = tickets_payload.get("tickets")
+    if not isinstance(ticket_rows, list):
+        return
+
+    force_script_type = bool(tags.get("is_script"))
+
+    for ticket in ticket_rows:
+        if not isinstance(ticket, dict):
+            continue
+
+        normalized_type = _normalize_ticket_type(ticket.get("type"))
+        if force_script_type:
+            normalized_type = "script"
+        if not normalized_type:
+            normalized_type = "backend"
+
+        ticket["type"] = normalized_type
+
+        labels = list(ticket.get("labels") or [])
+        if normalized_type not in labels:
+            labels.insert(0, normalized_type)
+        for key, enabled in tags.items():
+            if enabled and key not in labels:
+                labels.append(key)
+        ticket["labels"] = labels
+
+
+def normalize_tasking_payload_for_storage(
+    tickets_payload: dict | None,
+    project_tags: dict | None = None,
+) -> dict | None:
+    """
+    Normalize PM tasking payload so downstream storage/routing is deterministic.
+
+    - Ensures projectTags is complete and derived fields are correct.
+    - Coerces ticket types for script projects.
+    - Ensures each ticket has its final type and true project tags in labels.
+    """
+    if not isinstance(tickets_payload, dict):
+        return None
+
+    normalized_tags = _normalize_project_tags(
+        tickets_payload.get("projectTags"),
+        project_tags if isinstance(project_tags, dict) else None,
+    )
+    tickets_payload["projectTags"] = normalized_tags
+    _coerce_ticket_types_for_project(tickets_payload, normalized_tags)
+    return tickets_payload
+
+
 # ─── LLM caller ───────────────────────────────────────────────────────────────
 
 def _call_llm(history: list[dict], max_tokens: int = 512) -> str:
@@ -437,6 +498,13 @@ async def run_tasking(
                 parsed["projectTags"] = normalized_tags
         else:
             parsed["projectTags"] = normalized_tags
+
+        final_payload = parsed.get("tickets")
+        final_tags = parsed.get("projectTags") or normalized_tags
+        normalized_payload = normalize_tasking_payload_for_storage(final_payload, final_tags)
+        if isinstance(normalized_payload, dict):
+            parsed["tickets"] = normalized_payload
+            parsed["projectTags"] = normalized_payload.get("projectTags", final_tags)
 
     return {
         "agent_reply": parsed["displayText"],

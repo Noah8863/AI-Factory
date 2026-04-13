@@ -8,6 +8,16 @@ const authHeader = () => {
   return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
+const isPlaceholderJiraProject = (project) => {
+  const key = (project?.key || '').trim().toLowerCase()
+  const name = (project?.name || '').trim().toLowerCase()
+
+  if (key === 'sam1') return true
+  if (name.includes('(example)')) return true
+  if (name.includes(' example')) return true
+  return false
+}
+
 // ── sub-views ─────────────────────────────────────────────────────────────────
 
 function Skeleton() {
@@ -96,17 +106,19 @@ export default function JiraSettings({ className = '', onProjectSelect }) {
     try {
       const res = await api.get('/auth/jira/projects', { headers: authHeader() })
       const { cloud_id, projects: list, selected_project_key } = res.data
+      const filteredProjects = (list || []).filter((p) => !isPlaceholderJiraProject(p))
 
       setCloudId(cloud_id)
-      setProjects(list)
+      setProjects(filteredProjects)
       setConnected(true)
 
       if (selected_project_key) {
-        const match = list.find(p => p.key === selected_project_key)
-        setSelected(match
-          ? { key: match.key, name: match.name }
-          : { key: selected_project_key, name: selected_project_key },
-        )
+        const match = filteredProjects.find(p => p.key === selected_project_key)
+        if (match) {
+          setSelected({ key: match.key, name: match.name })
+        } else {
+          setSelected(null)
+        }
       }
       setLoadState('ready')
     } catch (err) {
