@@ -141,6 +141,7 @@ export default function ChatThread({
   // Cycling phrase state for the loading overlay
   const [phraseIndex, setPhraseIndex] = useState(0)
   const [phraseVisible, setPhraseVisible] = useState(true)
+  const prevShowReadyBannerRef = useRef(showReadyBanner)
 
   useEffect(() => {
     if (!isTaskingLoading) return
@@ -162,6 +163,16 @@ export default function ChatThread({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isSending])
+
+  useEffect(() => {
+    if (prevShowReadyBannerRef.current && !showReadyBanner && !isTasking && !isDone) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+      window.setTimeout(() => {
+        inputRef.current?.focus()
+      }, 60)
+    }
+    prevShowReadyBannerRef.current = showReadyBanner
+  }, [showReadyBanner, isTasking, isDone])
 
   const handleSend = () => {
     const trimmed = input.trim()

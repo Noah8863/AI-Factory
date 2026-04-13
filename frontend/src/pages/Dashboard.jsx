@@ -157,6 +157,7 @@ export default function Dashboard() {
   const [jiraStatus, setJiraStatus] = useState('loading')
   const [jiraProjectSelected, setJiraProjectSelected] = useState(true) // assume true until checked
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
+  const [mobileTabsHeight, setMobileTabsHeight] = useState(72)
 
   // ── Idea-level ticket tracking (for My Ideas page) ──────────
   const [ideaTicketsMap, setIdeaTicketsMap] = useState({})  // { [ideaId]: { tickets, stillPending } }
@@ -200,6 +201,22 @@ export default function Dashboard() {
       viewport.removeEventListener('scroll', updateKeyboardState)
       setIsKeyboardOpen(false)
     }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const measureTabs = () => {
+      if (!window.matchMedia('(max-width: 640px)').matches) return
+      const tabs = document.querySelector('.bottom-tabs')
+      if (!tabs) return
+      const nextHeight = Math.round(tabs.getBoundingClientRect().height)
+      if (nextHeight > 0) setMobileTabsHeight(nextHeight)
+    }
+
+    measureTabs()
+    window.addEventListener('resize', measureTabs)
+    return () => window.removeEventListener('resize', measureTabs)
   }, [])
 
   useEffect(() => {
@@ -630,10 +647,25 @@ export default function Dashboard() {
 
   const charCount = text.length
   const charColor = charCount > MAX_CHARS * 0.9 ? 'rose' : charCount > MAX_CHARS * 0.7 ? 'amber' : 'default'
-  const dashboardClassName = `dashboard${activeNav === 'chat' ? ' dashboard--chat' : ''}${isKeyboardOpen ? ' dashboard--keyboard-open' : ''}`
+  const isDecisionMode =
+    activeNav === 'chat' &&
+    !!conversation &&
+    (
+      showReadyBanner ||
+      (conversation.status === 'tasking' && !isTaskingLoading)
+    )
+
+  const effectiveMobileOffset = (activeNav === 'chat' && !isKeyboardOpen && !isDecisionMode)
+    ? mobileTabsHeight
+    : 0
+
+  const dashboardClassName = `dashboard${activeNav === 'chat' ? ' dashboard--chat' : ''}${isKeyboardOpen ? ' dashboard--keyboard-open' : ''}${isDecisionMode ? ' dashboard--decision-active' : ''}`
+  const dashboardStyle = {
+    '--mobile-chat-offset': `${effectiveMobileOffset}px`,
+  }
 
   return (
-    <div className={dashboardClassName}>
+    <div className={dashboardClassName} style={dashboardStyle}>
 
       {/* ── Animated background ───────────────────────────────── */}
       <div className="dashboard__bg">

@@ -3,6 +3,7 @@
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
 .dashboard {
+  --mobile-chat-offset: 0px;
   position: relative;
   display: flex;
   min-height: 100vh;
@@ -383,7 +384,7 @@
 
       @media (max-width: 640px) {
         width: 100%;
-        height: calc(100dvh - 64px - 64px - env(safe-area-inset-bottom, 0px));
+        height: calc(100dvh - 64px);
         min-height: 0;
       }
     }
@@ -397,11 +398,15 @@
       opacity: 0;
       pointer-events: none;
     }
+  }
+}
 
-    .dashboard__main--chat {
-      .chat-thread {
-        height: calc(100dvh - 64px);
-      }
+.dashboard--chat.dashboard--decision-active {
+  @media (max-width: 640px) {
+    .bottom-tabs {
+      transform: translateY(120%);
+      opacity: 0;
+      pointer-events: none;
     }
   }
 }
