@@ -56,6 +56,15 @@ output ONLY a JSON block in this exact format — no prose before or after it:
   "projectSummary": "string (2–3 sentence overview)",
   "githubRepoName": "string (lowercase-kebab-case)",
   "jiraProjectKey": "string (UPPERCASE, max 10 characters, letters and numbers only — e.g. MYAPP, SHOPFE)",
+  "projectTags": {
+    "has_frontend": false,
+    "has_backend": false,
+    "is_script": false,
+    "is_mobile_app": false,
+    "is_devops_program": false,
+    "is_full_stack": false,
+    "has_mixed_technologies": false
+  },
   "tickets": [
     {
       "id": "string (e.g. BE-1, FE-1)",
@@ -74,6 +83,33 @@ output ONLY a JSON block in this exact format — no prose before or after it:
 ```
 
 ### Field definitions
+
+**projectTags** — a JSON object where every key is ALWAYS present and set to a boolean true/false.
+Never omit a key. Set each to true or false based on the project being described.
+
+Key definitions:
+- `has_frontend`          — true if the project includes a web frontend (HTML/CSS/JS, React, Vue, etc.)
+- `has_backend`           — true if the project includes a server-side API or backend service
+- `is_script`             — true if the project is a standalone script or CLI tool (no web server, no frontend)
+- `is_mobile_app`         — true if the project targets iOS/Android (React Native, Flutter, Expo, etc.)
+- `is_devops_program`     — true if the project is primarily infrastructure, CI/CD pipelines, Docker configs, or monitoring setup
+- `is_full_stack`         — true if and only if BOTH `has_frontend` AND `has_backend` are true
+- `has_mixed_technologies` — true if the project uses technologies from more than one language or runtime paradigm
+                             (e.g. Python backend + JavaScript frontend, or Node API + React Native mobile)
+
+Rules:
+- ALL seven keys must always be present. Never output a subset.
+- `is_full_stack` must equal `has_frontend AND has_backend` — never set it independently.
+- Multiple keys can be true at once: a DevOps project with an admin dashboard gets `is_devops_program: true` and `has_frontend: true`.
+- A standard full-stack web app: `has_frontend: true, has_backend: true, is_full_stack: true`, others false.
+- A pure REST API: `has_backend: true`, all others false.
+- A CLI data-processing script: `is_script: true`, all others false.
+
+**Ticket label stamping** — for every ticket in the `tickets` array, you MUST add the name of each
+`projectTags` key that is `true` as a string entry in that ticket's `labels` array.
+Example: if `has_frontend` and `is_full_stack` are both true, every ticket's `labels` must include
+`"has_frontend"` and `"is_full_stack"` (in addition to any other labels you assign).
+This allows downstream AI agents to filter Jira tickets by project type.
 
 **priority** — reflects how much this ticket blocks other work, not just its importance:
 - "High"   — Foundation phase work; blocks many downstream tickets; must be done first
@@ -196,9 +232,40 @@ def parse_agent_reply(raw: str) -> dict:
     else:
         phase = "chat"
 
+    # Normalise projectTags into a guaranteed-complete boolean dict.
+    # The LLM outputs the object; we fill in any missing keys with False so
+    # downstream code can always do tags.get("has_frontend", False) safely.
+    _TAG_KEYS = (
+        "has_frontend",
+        "has_backend",
+        "is_script",
+        "is_mobile_app",
+        "is_devops_program",
+        "is_full_stack",
+        "has_mixed_technologies",
+    )
+    project_tags: dict[str, bool] = {k: False for k in _TAG_KEYS}
+    if tickets and isinstance(tickets, dict):
+        raw_tags = tickets.get("projectTags", {})
+        if isinstance(raw_tags, dict):
+            for key in _TAG_KEYS:
+                if key in raw_tags:
+                    project_tags[key] = bool(raw_tags[key])
+        # Back-compat: if the LLM still returns a list, convert it
+        elif isinstance(raw_tags, list):
+            for key in raw_tags:
+                if key in project_tags:
+                    project_tags[key] = True
+
+        # Enforce the derived rule: is_full_stack = has_frontend AND has_backend
+        project_tags["is_full_stack"] = (
+            project_tags["has_frontend"] and project_tags["has_backend"]
+        )
+
     return {
         "displayText": display_text,
         "isReady": is_ready,
         "phase": phase,
-        "tickets": tickets
+        "tickets": tickets,
+        "projectTags": project_tags,
     }

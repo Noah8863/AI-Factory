@@ -281,6 +281,18 @@ async def start_tasking(
 
     tickets_data = result.get("tickets") or {}
 
+    # ── 0. Store project type tags from the PM's JSON ────────────
+    # Tags are written once on first tasking and never overwritten on re-runs,
+    # so the project type stays stable even if more tickets are added later.
+    if not conversation.project_tags:
+        project_tags = result.get("projectTags") or []
+        if project_tags:
+            conversation.project_tags = project_tags
+            logger.info(
+                "Project tags for conversation %s: %s",
+                conversation_id, project_tags,
+            )
+
     # ── 1. Create GitHub repo (first tasking only) ───────────────
     if conversation.github_repo_url is None:
         repo_name = tickets_data.get("githubRepoName")

@@ -132,14 +132,6 @@ export default function Dashboard() {
     }
   }, [])
 
-  // ── Poll active conversation tickets every 5 s while dev is running ──
-  const convPollRef = useRef(null)
-  useEffect(() => {
-    clearInterval(convPollRef.current)
-    if (!devInProcess || !conversation?.id) return
-    convPollRef.current = setInterval(() => fetchTickets(conversation.id), 5000)
-    return () => clearInterval(convPollRef.current)
-  }, [devInProcess, conversation?.id, fetchTickets])
 
   // ── Fetch tickets for all ideas (My Ideas page) ─────────────
   const fetchAllIdeaTickets = useCallback(async (ideaList) => {
@@ -161,30 +153,11 @@ export default function Dashboard() {
     return results
   }, [])
 
-  // Fetch idea tickets when switching to history tab, and poll while any are pending
-  const pollRef = useRef(null)
+  // Fetch idea tickets once when switching to history tab
   useEffect(() => {
-    if (activeNav !== 'history' || ideas.length === 0) {
-      clearInterval(pollRef.current)
-      return
-    }
-    // Initial fetch
-    fetchAllIdeaTickets(ideas).then((results) => {
-      const hasPending = Object.values(results).some(d => d.stillPending > 0)
-      if (hasPending) {
-        pollRef.current = setInterval(() => {
-          fetchIdeas()                       // refresh idea statuses (pills)
-          fetchAllIdeaTickets(ideas).then((r) => {
-            if (!Object.values(r).some(d => d.stillPending > 0)) {
-              clearInterval(pollRef.current)
-              fetchIdeas()                   // final refresh to show "Completed"
-            }
-          })
-        }, 5000)
-      }
-    })
-    return () => clearInterval(pollRef.current)
-  }, [activeNav, ideas, fetchAllIdeaTickets, fetchIdeas])
+    if (activeNav !== 'history' || ideas.length === 0) return
+    fetchAllIdeaTickets(ideas)
+  }, [activeNav, ideas, fetchAllIdeaTickets])
 
   // ── Auto-save draft ──────────────────────────────────────────
   useEffect(() => {

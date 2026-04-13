@@ -11,6 +11,7 @@ class ConversationRead(BaseModel):
     id: int
     idea_id: int
     status: str
+    project_tags:     dict | None = None
     github_repo_name: str | None = None
     github_repo_url:  str | None = None
     jira_project_key: str | None = None

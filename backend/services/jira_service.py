@@ -444,6 +444,24 @@ async def _create_single_ticket(
         if dep_label not in labels:
             labels.append(dep_label)
 
+    # ── Human-readable project category stamp ─────────────────────────────────
+    # Derives a single category label from the machine-readable project tags
+    # the PM already stamped onto the ticket.  These are the labels used by
+    # Jira board views and future specialised AI agents to filter work queues.
+    #   "Website" → frontend or full-stack web projects
+    #   "App"     → mobile app projects
+    #   "Script"  → standalone scripts / CLI tools
+    #   "DevOps"  → infrastructure / CI-CD / monitoring projects
+    label_set = set(labels)
+    if ("has_frontend" in label_set or "is_full_stack" in label_set) and "Website" not in labels:
+        labels.append("Website")
+    if "is_mobile_app" in label_set and "App" not in labels:
+        labels.append("App")
+    if "is_script" in label_set and "Script" not in labels:
+        labels.append("Script")
+    if "is_devops_program" in label_set and "DevOps" not in labels:
+        labels.append("DevOps")
+
     # ── Priority ──────────────────────────────────────────────────────────────
     # Jira priority names must match an existing priority in the project.
     priority_name = _PRIORITY_MAP.get(ticket.get("priority", "Medium"), "Medium")

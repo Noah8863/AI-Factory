@@ -137,6 +137,81 @@ wrapping the entire document, no preamble, no explanation.
 """
 
 
+_CLAUDE_MD_SYSTEM_PROMPT = """
+You are the PM agent at AI Factory. Your task is to write a comprehensive CLAUDE.md file
+for a project that was just built entirely by AI developer agents. This file will be read
+by future AI agents (Claude Code or similar) who need to work on, debug, or extend this
+codebase. Write it as if briefing a highly capable developer who has never seen this repo.
+
+Write the CLAUDE.md in Markdown. Be specific, technical, and structured. Include:
+
+1. **Project Overview** — What the project does, who it serves, and the core problem it solves (2–4 sentences).
+2. **Tech Stack** — Every technology, framework, library, and tool used. Separate Backend and Frontend clearly.
+3. **Architecture** — How the system is structured. Describe the folder layout, entry points, and how the backend and frontend communicate (REST, WebSocket, etc.).
+4. **Build & Development Commands** — Exact commands to install dependencies, run the dev server, and build for production — for both backend and frontend.
+5. **Environment Variables** — Every required env var, its purpose, and a placeholder value. Use a code block.
+6. **API Endpoints** — A Markdown table of all backend routes: Method | Path | Description | Auth Required.
+7. **Database Schema** — Every model/collection, its key fields, field types, and relationships to other models.
+8. **Key Algorithms & Patterns** — Any non-trivial logic worth flagging: auth flows, data processing pipelines, sequencing logic, state machines, caching strategies.
+9. **What Was Built (Tickets)** — A breakdown of every implemented ticket grouped by Phase (Foundation → Core → Integration → Polish). For each ticket: ID, title, and a one-line summary of what it added to the codebase.
+10. **Known Constraints & Notes** — Decisions made, trade-offs, or gotchas a future agent must know before touching this code.
+
+Output ONLY raw Markdown — no code fences wrapping the entire document, no preamble, no explanation.
+"""
+
+
+def generate_claude_md(
+    history: list[dict],
+    tickets: list[dict],
+    project_name: str = "Project",
+    live_url: str | None = None,
+) -> str:
+    """
+    Generate a CLAUDE.md from the PM conversation history and the full ticket list.
+    Committed to the generated project repo so future AI agents have full context.
+
+    Args:
+        history:      PM conversation messages (role/content dicts).
+        tickets:      List of ticket dicts with keys: id, type, phase, sequence,
+                      title, description, status.
+        project_name: Human-friendly project title derived from the repo slug.
+        live_url:     Optional GitHub Pages URL for reference.
+
+    Returns the raw Markdown string ready to be committed to the repo.
+    """
+    live_url_line = f"The project is live at: {live_url}\n\n" if live_url else ""
+
+    # Format the ticket list into a structured block so the LLM has exact data
+    ticket_lines = []
+    for t in sorted(tickets, key=lambda x: (x.get("sequence") or 999, x.get("id", ""))):
+        phase = t.get("phase") or "Unknown"
+        ticket_lines.append(
+            f"[{t.get('id', '?')}] ({t.get('type', '?').upper()} | {phase} | seq {t.get('sequence', '?')}) "
+            f"{t.get('title', 'Untitled')} — {t.get('description', '')[:200]}"
+        )
+    tickets_block = "\n".join(ticket_lines)
+
+    claude_md_prompt = (
+        f"The project is called \"{project_name}\".\n\n"
+        f"{live_url_line}"
+        f"The following tickets were implemented by AI developer agents to build this project:\n\n"
+        f"{tickets_block}\n\n"
+        "Using the conversation history above and the ticket list, write a complete CLAUDE.md "
+        "for this repository. Be precise about the tech stack, file structure, and what each "
+        "ticket added to the codebase. Future AI agents will rely on this file to understand "
+        "the project without reading every source file."
+    )
+    messages = history + [{"role": "user", "content": claude_md_prompt}]
+
+    response = _client.messages.create(
+        model=_MODEL,
+        max_tokens=4096,
+        system=_CLAUDE_MD_SYSTEM_PROMPT,
+        messages=messages,
+    )
+    return response.content[0].text
+
+
 def generate_readme(
     history: list[dict],
     project_name: str = "Project",

@@ -457,12 +457,37 @@ async def run_all_tickets(
         live_url = f"https://{org_name}.github.io/{repo}/"
 
         # 1. Deploy GitHub Actions CI/CD workflow
+        # Derive project type from the PM-assigned tags stored on the conversation.
+        # Fall back to inspecting ticket types for older rows that pre-date tagging.
+        project_tags: dict[str, bool] = conversation.project_tags or {}
+        if project_tags:
+            has_frontend          = project_tags.get("has_frontend",          False)
+            has_backend           = project_tags.get("has_backend",           False)
+            is_script             = project_tags.get("is_script",             False)
+            is_mobile_app         = project_tags.get("is_mobile_app",         False)
+            is_devops_program     = project_tags.get("is_devops_program",     False)
+            is_full_stack         = project_tags.get("is_full_stack",         False)
+            has_mixed_technologies = project_tags.get("has_mixed_technologies", False)
+        else:
+            # Legacy fallback: derive from ticket types
+            has_frontend          = any(t.type == "frontend" for t in all_tickets)
+            has_backend           = any(t.type == "backend"  for t in all_tickets)
+            is_script             = False
+            is_mobile_app         = False
+            is_devops_program     = False
+            is_full_stack         = has_frontend and has_backend
+            has_mixed_technologies = False
+
         logger.info(
-            "All tickets done for conversation %s — deploying CI/CD workflow to %s.",
+            "All tickets done for conversation %s — deploying CI/CD workflow to %s "
+            "(has_frontend=%s, has_backend=%s, is_full_stack=%s, is_script=%s, "
+            "is_mobile_app=%s, is_devops_program=%s, has_mixed_technologies=%s).",
             conversation_id, repo,
+            has_frontend, has_backend, is_full_stack,
+            is_script, is_mobile_app, is_devops_program, has_mixed_technologies,
         )
         try:
-            ok = deploy_ci_workflow(repo)
+            ok = deploy_ci_workflow(repo, has_frontend=has_frontend)
             if ok:
                 logger.info("CI/CD workflow deployed to %s.", repo)
             else:
@@ -475,23 +500,24 @@ async def run_all_tickets(
             )
 
         # 2. Generate and commit a README.md from the chat history
+        # Build history and project_name here so the CLAUDE.md block below can also use them.
+        from models.message import Message
+
+        msgs = (
+            db.query(Message)
+            .filter(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.asc())
+            .all()
+        )
+        history = [
+            {"role": "user" if m.role == "user" else "assistant", "content": m.content}
+            for m in msgs
+        ]
+        # Derive a human-friendly project name from the repo slug
+        project_name = repo.replace("-", " ").title()
+
         try:
-            from models.message import Message
             from services.pm_agent import generate_readme
-
-            msgs = (
-                db.query(Message)
-                .filter(Message.conversation_id == conversation_id)
-                .order_by(Message.created_at.asc())
-                .all()
-            )
-            history = [
-                {"role": "user" if m.role == "user" else "assistant", "content": m.content}
-                for m in msgs
-            ]
-
-            # Derive a human-friendly project name from the repo slug
-            project_name = repo.replace("-", " ").title()
 
             logger.info("Generating README.md for %s (live_url=%s) …", repo, live_url)
             readme_md = generate_readme(
@@ -514,6 +540,48 @@ async def run_all_tickets(
         except Exception as exc:
             logger.exception(
                 "Failed to generate/commit README.md for %s: %s", repo, exc,
+            )
+
+        # 3. Generate and commit CLAUDE.md — full technical context for future AI agents
+        try:
+            from services.pm_agent import generate_claude_md
+
+            # Build a lean ticket summary (skip raw agent_output to keep the prompt tight)
+            ticket_summaries = [
+                {
+                    "id":          t.ticket_id,
+                    "type":        t.type,
+                    "phase":       t.phase,
+                    "sequence":    t.sequence,
+                    "title":       t.title,
+                    "description": t.description,
+                    "status":      t.status,
+                }
+                for t in all_tickets
+            ]
+
+            logger.info("Generating CLAUDE.md for %s …", repo)
+            claude_md = generate_claude_md(
+                history=history,
+                tickets=ticket_summaries,
+                project_name=project_name,
+                live_url=live_url,
+            )
+
+            ok = write_file_to_repo(
+                repo_name=repo,
+                file_path="CLAUDE.md",
+                content=claude_md,
+                branch="main",
+                commit_message="AI Agent: add CLAUDE.md project context",
+            )
+            if ok:
+                logger.info("CLAUDE.md committed to %s.", repo)
+            else:
+                logger.warning("Failed to write CLAUDE.md to %s.", repo)
+        except Exception as exc:
+            logger.exception(
+                "Failed to generate/commit CLAUDE.md for %s: %s", repo, exc,
             )
 
     # ── Update idea status based on final ticket outcomes ─────────────────────
