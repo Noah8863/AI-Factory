@@ -1,0 +1,206 @@
+AI Factory — Project Roadmap
+============================
+Last updated: 2026-04-12
+
+This file tracks the delta between the project vision (CLAUDE.md) and the current
+implementation. Items are organized by priority. Nothing here is aspirational fluff —
+every item maps to a specific gap found in the code.
+
+────────────────────────────────────────────────────────────────────────────────
+ CRITICAL — Security / Data Integrity
+────────────────────────────────────────────────────────────────────────────────
+
+[x] 401 Interceptor on Frontend
+    frontend/src/utils/api.js — Response interceptor now detects 401, clears
+    aif_token / aif_user / aif_avatar from localStorage, dispatches a custom
+    'aif:session-expired' DOM event. Dashboard.jsx listens for the event, sets
+    sessionExpired state, and redirects to /login after 3 s. ChatThread shows a
+    lockout banner and disables the input/send button immediately on expiry.
+
+[ ] Protect Unauthenticated Routes
+    The following routes have no auth guard (Depends(get_current_user)) and should:
+      - GET  /conversations/{id}             (anyone can read full chat history)
+      - POST /conversations/{id}/reopen      (anyone can reopen a conversation)
+      - POST /conversations/{id}/decline-tasking
+      - GET  /agents/{conversation_id}/tickets  (used for polling — intentional?)
+    Decide: make them all protected, or keep ticket polling open but add ownership
+    checks. Document the decision in CLAUDE.md §21.
+
+[ ] ALTER TABLE guard for project_tags column
+    backend/main.py — The project_tags JSON column is defined in the Conversation
+    model but is NOT guarded in the ALTER TABLE block at startup. Existing Railway
+    PostgreSQL databases will not have the column and will silently fail when the
+    app tries to read or write tags. Add:
+      ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_tags TEXT;
+
+────────────────────────────────────────────────────────────────────────────────
+ HIGH — PM Agent Behavior & Quality
+────────────────────────────────────────────────────────────────────────────────
+
+[ ] PM Agent: Explicit Scope-Adaptive Ticket Count Instructions
+    backend/agents/pm_agent.py — The prompt says "Aim for 6-12 tickets" but has
+    no guidance for simple cases. Per the vision, the PM should produce:
+      - Simple script / CLI tool → 1-3 tickets, ask 1-2 questions
+      - Backend API / moderate scope → 4-8 tickets, ask 3-5 questions
+      - Full-stack / complex system → 8-15 tickets, ask 5-8 questions
+    The PM should recognize "make me a simple X" patterns and not over-engineer.
+    Update the system prompt in PM_SYSTEM_PROMPT with explicit scope tiers.
+
+[ ] PM Agent: Classify Project Type Early in Discovery
+    backend/agents/pm_agent.py — The PM currently doesn't explicitly identify
+    what kind of project the user wants (web app, script, API, mobile app, DevOps
+    tool) as a first step. Adding an early classification question allows the PM
+    to calibrate discovery depth and ensures the right tags get set. The type
+    identification should happen before any feature questions.
+
+[ ] Developer Plan as Named Artifact
+    backend/agents/pm_agent.py — The CLAUDE.md vision describes the PM producing
+    a "developer plan" (tech stack, folder structure, libraries, tools, agent types
+    needed) before generating tickets. Currently Phase 1 gathers this implicitly
+    but it's not surfaced as a distinct structured output. Consider adding a
+    "projectPlan" object to the ticket JSON that captures:
+      - techStack: { backend, frontend, database, tools }
+      - folderStructure: string description
+      - externalServices: list
+      - agentTypesNeeded: list (e.g. ["backend", "frontend"])
+    This would make the PM output more useful as documentation and allow the
+    generated CLAUDE.md to be richer and more accurate.
+
+────────────────────────────────────────────────────────────────────────────────
+ HIGH — Feature Gaps
+────────────────────────────────────────────────────────────────────────────────
+
+[ ] Register Page: Personality Preference Not Stored
+    frontend/src/pages/Register.jsx — Step 2 of the registration wizard captures
+    a personality preference (concise / balanced / detailed) but it is never sent
+    to the backend. The UserSettings model has no personality column. Either:
+      Option A: Add personality column to UserSettings, send it on register, and
+                use it to adjust the PM Agent's response style (e.g. shorter/longer
+                replies in discovery).
+      Option B: Remove the UI step until Option A is ready.
+    Currently it's a broken promise to the user — they pick a preference that
+    does nothing.
+
+[ ] Email Notifications: Toggle Exists, Nothing Sends
+    backend/models/user_settings.py — notifications_enabled is stored. There is
+    no email sending logic anywhere. Either wire up a transactional email provider
+    (SendGrid, Resend, etc.) or remove the toggle from the settings UI until ready.
+
+────────────────────────────────────────────────────────────────────────────────
+ MEDIUM — Agent System Expansion (Tag-Driven)
+────────────────────────────────────────────────────────────────────────────────
+
+    The project type tag system (has_frontend, has_backend, is_script,
+    is_mobile_app, is_devops_program) is already plumbed end-to-end, but only
+    two agent types exist. The following agents need to be built when their
+    tag categories are common enough to warrant it:
+
+[ ] Script / CLI Agent (is_script: true)
+    Currently script tickets fall through to the Backend Developer Agent, which
+    works but produces Node.js/Express scaffolding even for Python scripts.
+    Need: backend/agents/script_agent.py + backend/services/script_agent.py
+    Routing: agent_runner.run_ticket() should detect is_script and route
+    accordingly. Script agent should default to Python and produce flat file
+    structures, no server framework.
+
+[ ] Mobile Developer Agent (is_mobile_app: true)
+    Need: backend/agents/mobile_agent.py + backend/services/mobile_agent.py
+    Default stack: React Native + Expo. CI/CD workflow should skip GitHub Pages
+    (mobile apps don't deploy there) and optionally add an Expo build step.
+
+[ ] DevOps Agent (is_devops_program: true)
+    Need: backend/agents/devops_agent.py + backend/services/devops_agent.py
+    Default output: Dockerfiles, GitHub Actions workflows, Terraform/K8s configs.
+    No frontend, no GitHub Pages deploy.
+
+[ ] Agent Routing in agent_runner.run_ticket()
+    backend/services/agent_runner.py — Currently routes on ticket.type
+    ("backend" | "frontend"). As new agent types are added, expand routing logic
+    to also check project tags or a new ticket.agent_type field. Decision needed:
+    derive agent from ticket type alone, or add explicit agent_type field to Ticket.
+
+────────────────────────────────────────────────────────────────────────────────
+ MEDIUM — Architecture & Developer Experience
+────────────────────────────────────────────────────────────────────────────────
+
+[ ] WebSocket Support for Real-Time Agent Progress
+    Currently all dev-agent progress updates use REST polling at ~1s intervals
+    (frontend/src/components/ChatThread.jsx). This creates ~60 requests/min per
+    active build. Replace with WebSocket or Server-Sent Events so the server
+    pushes ticket status changes instead of the client polling.
+    High impact: reduces server load, improves UX responsiveness.
+
+[ ] Alembic Migrations
+    backend/main.py — Schema changes are applied via hand-written ALTER TABLE
+    guards. This is fragile as columns multiply. Add Alembic so that:
+      - All schema changes are versioned
+      - Rolling back a broken deploy is possible
+      - Dev and prod can safely diverge and converge
+
+[ ] Agent Output Inspection UI
+    backend/models/ticket.py — Ticket.agent_output stores raw JSON from the dev
+    agent but there's no UI to view it. Failed tickets show an error_msg but
+    debugging requires direct DB access. Add a "view agent output" expandable
+    panel in DevProgress.jsx for failed tickets.
+
+[ ] Rate Limiting Per User
+    backend/api/routes/agents.py — A single user can queue unlimited agent jobs.
+    With no rate limiting, one user could exhaust LLM budget or lock up background
+    workers. Add a simple per-user concurrency check: reject if the user already
+    has a conversation in "processing" status.
+
+[ ] LLM Cost Tracking
+    No LLM usage is metered or capped. Track input/output tokens per conversation
+    (Anthropic SDK returns usage in the response). Store on Ticket or Conversation.
+    Surface in UI or admin dashboard. This is important before any public launch.
+
+────────────────────────────────────────────────────────────────────────────────
+ LOW — Polish & UX
+────────────────────────────────────────────────────────────────────────────────
+
+[ ] Jira Project Auto-Creation
+    backend/services/jira_service.py — Code for auto-creating a Jira project
+    exists but is commented out in conversations.py. Users currently must pre-
+    create their Jira project and select it. Re-enable auto-creation with a
+    sensible fallback: if project_key already exists in the user's workspace,
+    reuse it; otherwise create it.
+
+[ ] Idea Title Auto-Derivation
+    backend/models/idea.py — The Idea.title column exists (nullable) but is
+    never populated. The History tab shows ideas without titles. Derive a short
+    title (via LLM or simple truncation) from the first user message and store it
+    when the conversation is created.
+
+[ ] Empty State: History Tab with No Ideas
+    frontend/src/pages/Dashboard.jsx — Check whether the History tab shows a
+    meaningful empty state when the user has no ideas, or just an empty list.
+
+[ ] JWT Expiry: User-Facing Feedback
+    Related to the 401 interceptor item above. When the session expires and the
+    user is redirected to /login, show a toast or message explaining why
+    ("Your session expired — please log in again") rather than a blank redirect.
+
+[ ] Conversation Ownership on Reopen/Decline Routes
+    Even after adding auth to reopen/decline-tasking routes, add an ownership
+    check: verify conversation.user_id matches the authenticated user's ID.
+    Without this, authenticated users can still manipulate other users' conversations
+    if they know the conversation ID.
+
+────────────────────────────────────────────────────────────────────────────────
+ DONE — Implemented and Verified
+────────────────────────────────────────────────────────────────────────────────
+
+[x] Project type tag system (7 keys, always-present boolean object)
+[x] Tags stored on conversation.project_tags (JSON column)
+[x] Tags stamped onto every Jira ticket label set (machine-readable)
+[x] Human-readable Jira category stamps (Website / App / Script / DevOps)
+[x] is_full_stack always derived as has_frontend AND has_backend (never trusted from LLM)
+[x] CI/CD workflow branching — full with GitHub Pages (has_frontend=True)
+                              — backend-only, no deploy (has_frontend=False)
+[x] CLAUDE.md committed to generated repos after README (AI agent context file)
+[x] Post-completion pipeline: CI workflow → README → CLAUDE.md
+[x] PM Agent __PM_READY__ token and phase 1/2/3 flow
+[x] Jira OAuth 2.0 3LO flow with token refresh
+[x] Dependency-aware ticket execution (asyncio.gather at same sequence level)
+[x] Cancel and retry flows for dev agent tickets
+[x] Dark/light theme with persistence

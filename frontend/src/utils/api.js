@@ -20,7 +20,7 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Log all responses and errors
+// Log all responses and errors; handle 401 session expiry
 api.interceptors.response.use(
   (response) => {
     console.log(`📥 [${response.status}] ${response.config.url}`, response.data)
@@ -32,6 +32,18 @@ api.interceptors.response.use(
       data: error.response?.data,
       status: error.response?.status,
     })
+
+    if (error.response?.status === 401) {
+      // Clear auth data from localStorage
+      const user = JSON.parse(localStorage.getItem('aif_user') || '{}')
+      localStorage.removeItem('aif_token')
+      localStorage.removeItem('aif_user')
+      if (user?.id) localStorage.removeItem(`aif_avatar_${user.id}`)
+
+      // Notify the React tree so it can show a banner and redirect
+      window.dispatchEvent(new CustomEvent('aif:session-expired'))
+    }
+
     return Promise.reject(error)
   }
 )

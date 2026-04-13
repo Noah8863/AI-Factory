@@ -78,8 +78,21 @@ export default function Dashboard() {
   // ── Idea-level ticket tracking (for My Ideas page) ──────────
   const [ideaTicketsMap, setIdeaTicketsMap] = useState({})  // { [ideaId]: { tickets, stillPending } }
 
+  // ── Session-expired state ────────────────────────────────────
+  const [sessionExpired, setSessionExpired] = useState(false)
+
   // ── Auth guard ───────────────────────────────────────────────
   useEffect(() => { if (!user) navigate('/login') }, [])
+
+  // ── 401 / session-expiry handler ─────────────────────────────
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      setSessionExpired(true)
+      setTimeout(() => navigate('/login'), 3000)
+    }
+    window.addEventListener('aif:session-expired', handleSessionExpired)
+    return () => window.removeEventListener('aif:session-expired', handleSessionExpired)
+  }, [navigate])
 
   // ── Load ideas ───────────────────────────────────────────────
   const fetchIdeas = useCallback(async () => {
@@ -708,6 +721,7 @@ export default function Dashboard() {
             jiraStatus={jiraStatus}
             jiraProjectSelected={jiraProjectSelected}
             jiraRequiredMessage={jiraStatus !== 'connected' ? JIRA_REQUIRED_MESSAGE : JIRA_PROJECT_REQUIRED_MESSAGE}
+            sessionExpired={sessionExpired}
             onSendMessage={handleSendMessage}
             onContinueChat={handleContinueChat}
             onStartTasking={handleStartTasking}

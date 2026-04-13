@@ -92,6 +92,7 @@ export default function ChatThread({
   devInProcess,
   agentRunError,
   agentTickets,
+  sessionExpired,
   onSendMessage,
   onContinueChat,
   onStartTasking,
@@ -138,7 +139,7 @@ export default function ChatThread({
 
   const handleSend = () => {
     const trimmed = input.trim()
-    if (!trimmed || isSending || isTasking || isDone || isJiraBlocked) return
+    if (!trimmed || isSending || isTasking || isDone || isJiraBlocked || sessionExpired) return
     setInput('')
     onSendMessage(trimmed)
     inputRef.current?.focus()
@@ -234,7 +235,21 @@ export default function ChatThread({
           <span>Conversation started</span>
         </div>
 
-        {isJiraBlocked && (
+        {sessionExpired && (
+          <div className="chat-thread__jira-lockout chat-thread__jira-lockout--expired" role="alert">
+            <div className="chat-thread__jira-lockout-icon">
+              <span className="material-icons">lock</span>
+            </div>
+            <div className="chat-thread__jira-lockout-body">
+              <p className="chat-thread__jira-lockout-title">Your session has expired</p>
+              <p className="chat-thread__jira-lockout-text">
+                You'll be redirected to the login page in a moment…
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isJiraBlocked && !sessionExpired && (
           <div className="chat-thread__jira-lockout" role="alert">
             <div className="chat-thread__jira-lockout-icon">
               <span className="material-icons">{jiraStatus !== 'connected' ? 'link_off' : 'folder_off'}</span>
@@ -361,17 +376,21 @@ export default function ChatThread({
             <textarea
               ref={inputRef}
               className="chat-thread__input"
-              placeholder={isJiraBlocked ? (jiraStatus !== 'connected' ? 'Connect Jira to continue chatting' : 'Select a Jira project to continue') : 'Reply to the PM agent…'}
+              placeholder={
+                sessionExpired  ? 'Session expired — redirecting…' :
+                isJiraBlocked   ? (jiraStatus !== 'connected' ? 'Connect Jira to continue chatting' : 'Select a Jira project to continue') :
+                'Reply to the PM agent…'
+              }
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={1}
-              disabled={isSending || isJiraBlocked}
+              disabled={isSending || isJiraBlocked || sessionExpired}
             />
             <button
               className="chat-thread__send"
               onClick={handleSend}
-              disabled={isJiraBlocked || !input.trim() || isSending}
+              disabled={isJiraBlocked || sessionExpired || !input.trim() || isSending}
               aria-label="Send message"
             >
               <span className="material-icons">send</span>
