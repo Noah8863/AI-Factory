@@ -97,7 +97,13 @@ function getIdeaPill(idea, ideaTicketsMap) {
 }
 
 const DRAFT_KEY = 'aif_draft'
+const DASHBOARD_NAV_KEY = 'aif_dashboard_nav'
 const MAX_CHARS = 3000
+
+function getInitialDashboardNav() {
+  const stored = localStorage.getItem(DASHBOARD_NAV_KEY)
+  return ['new', 'chat', 'history'].includes(stored) ? stored : 'new'
+}
 
 function formatDate(iso) {
   return new Date(iso).toLocaleString('en-US', {
@@ -115,7 +121,7 @@ export default function Dashboard() {
   const avatar = localStorage.getItem(`aif_avatar_${user?.id}`)
 
   // ── Nav & view state ────────────────────────────────────────
-  const [activeNav, setActiveNav] = useState('new')
+  const [activeNav, setActiveNav] = useState(getInitialDashboardNav)
 
   // ── Idea input state ────────────────────────────────────────
   const [text, setText] = useState(() => localStorage.getItem(DRAFT_KEY) || '')
@@ -160,6 +166,16 @@ export default function Dashboard() {
   useEffect(() => {
     activeConversationIdRef.current = conversation?.id ?? null
   }, [conversation?.id])
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_NAV_KEY, activeNav)
+  }, [activeNav])
+
+  useEffect(() => {
+    if (activeNav === 'chat' && !conversation) {
+      setActiveNav('new')
+    }
+  }, [activeNav, conversation])
 
   // ── Auth guard ───────────────────────────────────────────────
   useEffect(() => { if (!user) navigate('/login') }, [])
@@ -629,15 +645,15 @@ export default function Dashboard() {
           <span className="material-icons">add_circle</span>
           New
         </button>
-        {conversation && (
-          <button
-            className={`bottom-tabs__item ${activeNav === 'chat' ? 'bottom-tabs__item--active' : ''}`}
-            onClick={() => setActiveNav('chat')}
-          >
-            <span className="material-icons">forum</span>
-            Chat
-          </button>
-        )}
+        <button
+          className={`bottom-tabs__item ${activeNav === 'chat' ? 'bottom-tabs__item--active' : ''} ${!conversation ? 'bottom-tabs__item--disabled' : ''}`}
+          onClick={() => conversation && setActiveNav('chat')}
+          disabled={!conversation}
+          title={conversation ? 'Open active chat' : 'No active chat yet'}
+        >
+          <span className="material-icons">forum</span>
+          Active
+        </button>
         <button
           className={`bottom-tabs__item ${activeNav === 'history' ? 'bottom-tabs__item--active' : ''}`}
           onClick={() => setActiveNav('history')}
@@ -666,21 +682,21 @@ export default function Dashboard() {
             New Idea
           </button>
 
-          {conversation && (
-            <button
-              className={`sidebar__item ${activeNav === 'chat' ? 'sidebar__item--active' : ''}`}
-              onClick={() => setActiveNav('chat')}
-            >
-              <span className="material-icons">forum</span>
-              Active Chat
-              {conversation.status === 'ready_to_task' && (
-                <span className="sidebar__dot sidebar__dot--green" title="Ready to task" />
-              )}
-              {conversation.status === 'tasking' && (
-                <span className="sidebar__dot sidebar__dot--indigo" title="Tasking" />
-              )}
-            </button>
-          )}
+          <button
+            className={`sidebar__item ${activeNav === 'chat' ? 'sidebar__item--active' : ''} ${!conversation ? 'sidebar__item--disabled' : ''}`}
+            onClick={() => conversation && setActiveNav('chat')}
+            disabled={!conversation}
+            title={conversation ? 'Open active chat' : 'No active chat yet'}
+          >
+            <span className="material-icons">forum</span>
+            Active Chat
+            {conversation?.status === 'ready_to_task' && (
+              <span className="sidebar__dot sidebar__dot--green" title="Ready to task" />
+            )}
+            {conversation?.status === 'tasking' && (
+              <span className="sidebar__dot sidebar__dot--indigo" title="Tasking" />
+            )}
+          </button>
 
           <button
             className={`sidebar__item ${activeNav === 'history' ? 'sidebar__item--active' : ''}`}

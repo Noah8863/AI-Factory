@@ -5,6 +5,8 @@ import Navbar from '../components/Navbar'
 import { useTheme } from '../context/ThemeContext'
 import './Profile.scss'
 
+const DASHBOARD_NAV_KEY = 'aif_dashboard_nav'
+
 export default function Profile() {
   const navigate = useNavigate()
   const user = JSON.parse(localStorage.getItem('aif_user') || 'null')
@@ -116,6 +118,16 @@ export default function Profile() {
   }
 
   const initials = (displayName || user?.username || 'U')[0].toUpperCase()
+
+  const goToDashboardTab = (tab) => {
+    localStorage.setItem(DASHBOARD_NAV_KEY, tab)
+    navigate('/dashboard')
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('aif_user')
+    navigate('/')
+  }
 
   return (
     <div className="profile-page">
@@ -413,6 +425,29 @@ export default function Profile() {
 
         </div>
       </div>
+
+      <nav className="bottom-tabs">
+        <button className="bottom-tabs__item" onClick={() => goToDashboardTab('new')}>
+          <span className="material-icons">add_circle</span>
+          New
+        </button>
+        <button className="bottom-tabs__item" onClick={() => goToDashboardTab('chat')}>
+          <span className="material-icons">forum</span>
+          Active
+        </button>
+        <button className="bottom-tabs__item" onClick={() => goToDashboardTab('history')}>
+          <span className="material-icons">history</span>
+          Ideas
+        </button>
+        <button className="bottom-tabs__item bottom-tabs__item--active" aria-current="page">
+          <span className="material-icons">person</span>
+          Profile
+        </button>
+        <button className="bottom-tabs__item bottom-tabs__item--danger" onClick={handleLogout}>
+          <span className="material-icons">logout</span>
+          Logout
+        </button>
+      </nav>
     </div>
   )
 }

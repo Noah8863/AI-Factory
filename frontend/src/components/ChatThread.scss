@@ -6,14 +6,16 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 0px);
-  max-height: 100vh;
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  max-height: none;
   overflow: hidden;
   background: $bg-base;
   border-radius: $radius-lg;
 
   @media (max-width: 640px) {
-    height: calc(100vh - 60px); // account for mobile tab bar
+    height: auto;
     border-radius: 0;
   }
 }
@@ -764,6 +766,11 @@
     max-height: 200px;
     overflow-y: auto;
     overflow-x: hidden;
+
+    @media (max-width: 640px) {
+      padding: 0 10px 10px;
+      max-height: 36vh;
+    }
   }
 
   &__ticket {
@@ -789,6 +796,11 @@
     gap: 8px;
     width: 100%;
     min-width: 0;
+
+    @media (max-width: 640px) {
+      align-items: flex-start;
+      gap: 6px;
+    }
   }
 
   &__ticket-icon {
@@ -814,6 +826,14 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+
+    @media (max-width: 640px) {
+      white-space: normal;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      line-height: 1.35;
+    }
   }
 
   &__ticket-badge {
