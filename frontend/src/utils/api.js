@@ -16,21 +16,16 @@ api.interceptors.request.use((config) => {
       config.headers.Authorization = `Bearer ${token}`
     }
   }
-  console.log(`📤 [${config.method.toUpperCase()}] ${config.url}`, config.data || {})
   return config
 })
 
-// Log all responses and errors; handle 401 session expiry
+// Handle errors and 401 session expiry; success responses pass through silently
 api.interceptors.response.use(
-  (response) => {
-    console.log(`📥 [${response.status}] ${response.config.url}`, response.data)
-    return response
-  },
+  (response) => response,
   (error) => {
-    console.error(`❌ [${error.response?.status || 'NO_RESPONSE'}] ${error.config?.url}`, {
+    console.error(`[${error.response?.status || 'NO_RESPONSE'}] ${error.config?.url}`, {
       message: error.message,
       data: error.response?.data,
-      status: error.response?.status,
     })
 
     if (error.response?.status === 401) {

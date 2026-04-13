@@ -10,6 +10,11 @@ every item maps to a specific gap found in the code.
  CRITICAL — Security / Data Integrity
 ────────────────────────────────────────────────────────────────────────────────
 
+[x] Console log cleanup — api.js
+    Removed console.log from request interceptor and success response interceptor.
+    Only console.error remains (for failed requests). Responses visible in DevTools
+    Network tab as intended; no data leaks to browser console on success.
+
 [x] 401 Interceptor on Frontend
     frontend/src/utils/api.js — Response interceptor now detects 401, clears
     aif_token / aif_user / aif_avatar from localStorage, dispatches a custom
@@ -17,14 +22,16 @@ every item maps to a specific gap found in the code.
     sessionExpired state, and redirects to /login after 3 s. ChatThread shows a
     lockout banner and disables the input/send button immediately on expiry.
 
-[ ] Protect Unauthenticated Routes
-    The following routes have no auth guard (Depends(get_current_user)) and should:
-      - GET  /conversations/{id}             (anyone can read full chat history)
-      - POST /conversations/{id}/reopen      (anyone can reopen a conversation)
-      - POST /conversations/{id}/decline-tasking
-      - GET  /agents/{conversation_id}/tickets  (used for polling — intentional?)
-    Decide: make them all protected, or keep ticket polling open but add ownership
-    checks. Document the decision in CLAUDE.md §21.
+[x] Protect Unauthenticated Routes
+    All four routes now require Depends(get_current_user) + ownership checks:
+      - GET  /conversations/{id}             → auth + _get_owned_conversation
+      - POST /conversations/{id}/reopen      → auth + _get_owned_conversation
+      - POST /conversations/{id}/decline-tasking → auth + _get_owned_conversation
+      - GET  /agents/{conversation_id}/tickets   → auth + _get_owned_conversation
+    Decision: full protection on all routes. Polling (GET /tickets) was intentionally
+    open before but the cost of a small auth overhead is worth the security gain.
+    Ownership is checked via Idea.user_id join (Conversation.user_id is not always set).
+    Documented in CLAUDE.md §21.
 
 [ ] ALTER TABLE guard for project_tags column
     backend/main.py — The project_tags JSON column is defined in the Conversation

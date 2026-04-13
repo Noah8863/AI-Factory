@@ -39,10 +39,6 @@ TASKING_DECLINED_AGENT_MESSAGE = (
     "with me again."
 )
 
-# Optional bearer: does not raise 401 when the header is absent, so
-# unauthenticated callers can still use conversations (Jira is simply skipped).
-_optional_bearer = HTTPBearer(auto_error=False)
-
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
 JIRA_REQUIRED_MESSAGE = "Please connect your Jira account before making a project."
@@ -146,10 +142,12 @@ def create_conversation(
 
 
 @router.get("/{conversation_id}", response_model=ConversationDetail)
-def get_conversation(conversation_id: int, db: Session = Depends(get_db)):
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+def get_conversation(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    conversation = _get_owned_conversation(conversation_id, current_user.id, db)
     return _build_detail(conversation, db)
 
 
@@ -492,15 +490,17 @@ async def start_tasking(
 
 
 @router.post("/{conversation_id}/reopen", response_model=ConversationDetail)
-def reopen_conversation(conversation_id: int, db: Session = Depends(get_db)):
+def reopen_conversation(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Transitions a 'tasking' or 'done' conversation back to 'active' so the user
     can continue chatting with the PM agent to define additional requirements.
     Called when the user clicks "Yes" or "Add more requirements".
     """
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = _get_owned_conversation(conversation_id, current_user.id, db)
     if conversation.status not in ("tasking", "done"):
         raise HTTPException(status_code=400, detail="Conversation is not in a reopenable state.")
 
@@ -511,15 +511,17 @@ def reopen_conversation(conversation_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{conversation_id}/decline-tasking", response_model=ConversationDetail)
-def decline_tasking(conversation_id: int, db: Session = Depends(get_db)):
+def decline_tasking(
+    conversation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     Called when the user clicks "No" after tickets have been generated.
     Stores the PM's closing message and transitions the conversation to 'done'.
     The user can still reopen via the 'Add more requirements' button.
     """
-    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
-    if not conversation:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+    conversation = _get_owned_conversation(conversation_id, current_user.id, db)
     if conversation.status != "tasking":
         raise HTTPException(status_code=400, detail="Conversation is not in a declinable state.")
 

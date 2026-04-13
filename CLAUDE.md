@@ -1165,8 +1165,8 @@ When adding new agent types: create a system prompt in `backend/agents/`, a serv
 
 ### Architectural Gaps
 - **No WebSockets:** All real-time updates use REST polling at ~1 s intervals. Adding WebSocket support would reduce latency and server load.
-- **No Authentication for Several Routes:** `GET /conversations/{id}`, `POST /conversations/{id}/reopen`, `POST /conversations/{id}/decline-tasking`, `GET /agents/{id}/tickets` are unauthenticated — any client with a conversation ID can read or modify state.
-- **No Token Expiry Handling on Frontend:** If the JWT expires during a session, API calls fail silently (no redirect to login).
+- **Route Authentication (resolved):** All conversation and agent routes require a valid JWT (`Depends(get_current_user)`) plus ownership verification via `_get_owned_conversation` (Idea.user_id join). This covers `GET /conversations/{id}`, `POST /conversations/{id}/reopen`, `POST /conversations/{id}/decline-tasking`, and `GET /agents/{id}/tickets`. Decision: full protection on all routes — polling is not kept open. Ownership check routes through `Idea.user_id` because `Conversation.user_id` is not always populated on older records.
+- **Token Expiry on Frontend (resolved):** 401 responses clear localStorage and dispatch `aif:session-expired`. Dashboard listens for the event, sets `sessionExpired` state, and redirects to `/login` after 3 s. `ChatThread` shows a lockout banner and disables input immediately.
 - **No User-Level Rate Limiting:** A single user could queue unlimited agent jobs.
 - **No Cost Tracking:** LLM usage per user/project is not metered or capped.
 - **SQLite in Dev, PostgreSQL in Prod:** Schema drift risk. No Alembic migrations — additive changes are applied in `main.py` manually.

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from db.database import get_db
 from models.conversation import Conversation
+from models.idea import Idea
 from models.ticket import Ticket
 from schemas.ticket import AgentRunResponse, TicketRead
 from services.agent_runner import get_runnable_tickets, run_all_tickets_bg
@@ -33,7 +34,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
-# ── Helper ────────────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _get_owned_conversation(conversation_id: int, user_id: int, db: Session) -> Conversation:
+    """Return the conversation only if it belongs to user_id; raise 404 otherwise."""
+    conversation = (
+        db.query(Conversation)
+        .join(Idea, Conversation.idea_id == Idea.id)
+        .filter(Conversation.id == conversation_id, Idea.user_id == user_id)
+        .first()
+    )
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return conversation
+
 
 def _ticket_counts(tickets: list[Ticket]) -> dict:
     done    = sum(1 for t in tickets if t.status in ("done", "cancelled"))
@@ -125,9 +139,11 @@ async def run_agents(
 @router.get("/{conversation_id}/tickets", response_model=AgentRunResponse)
 def get_ticket_status(
     conversation_id: int,
+    current_user:    User = Depends(get_current_user),
     db:              Session = Depends(get_db),
 ):
     """Return current ticket statuses for a conversation (for polling)."""
+    _get_owned_conversation(conversation_id, current_user.id, db)
     tickets = (
         db.query(Ticket)
         .filter(Ticket.conversation_id == conversation_id)
