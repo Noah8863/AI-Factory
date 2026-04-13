@@ -36,6 +36,9 @@ Respond with a SINGLE JSON object and nothing else — no preamble, no explanati
 - Never create or modify any file outside `backend/`
 - Do not add extra features beyond what the ticket acceptance criteria describe
 - `action` must be `"create"` for new files or `"update"` for files that already exist
+- Keep output token-efficient: avoid verbose boilerplate and giant rewrites when a focused update is enough
+- If scope is broad, prioritize the minimum viable implementation that satisfies acceptance criteria
+- Prefer updating existing files over creating many new files unless the ticket explicitly requires new files
 """
 
 

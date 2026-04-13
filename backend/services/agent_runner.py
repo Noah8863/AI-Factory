@@ -38,6 +38,9 @@ from models.ticket import Ticket
 
 logger = logging.getLogger(__name__)
 
+_AUTO_SPLIT_MAX_ATTEMPTS = 2
+_AUTO_SPLIT_MAX_PARTS = 3
+
 
 def _build_error_msg(exc: Exception, stage: str = "unknown") -> str:
     """
@@ -174,6 +177,299 @@ def get_runnable_tickets(
         .all()
     )
     return [t for t in pending if _deps_satisfied(t, all_conv_tickets)]
+
+
+def _dedupe_keep_order(items: list[str]) -> list[str]:
+    return list(dict.fromkeys(items))
+
+
+def _is_max_token_failure(ticket: Ticket) -> bool:
+    msg = (ticket.error_msg or "").lower()
+    return "max_tokens" in msg or ("truncated" in msg and "token" in msg)
+
+
+def _split_attempt_from_labels(labels: list[str] | None) -> int:
+    attempts = 0
+    for label in labels or []:
+        if not isinstance(label, str):
+            continue
+        if not label.startswith("auto_split_attempt:"):
+            continue
+        _, _, value = label.partition(":")
+        try:
+            attempts = max(attempts, int(value))
+        except ValueError:
+            continue
+    return attempts
+
+
+def _fallback_split_parts(ticket: Ticket) -> list[dict]:
+    return [
+        {
+            "title": f"{ticket.title} - Part 1 (Core setup)",
+            "description": (
+                "Implement the core structure and foundational pieces required by this ticket. "
+                "Keep scope focused on setup, contracts, and essential scaffolding."
+            ),
+            "priority": ticket.priority or "Medium",
+            "phase": ticket.phase or "Core",
+        },
+        {
+            "title": f"{ticket.title} - Part 2 (Completion)",
+            "description": (
+                "Build on Part 1 and complete the remaining acceptance criteria. "
+                "Focus on finishing feature behavior with minimal, production-intent code."
+            ),
+            "priority": ticket.priority or "Medium",
+            "phase": ticket.phase or "Core",
+        },
+    ]
+
+
+def _next_split_ticket_id(
+    base_ticket_id: str,
+    attempt: int,
+    part_index: int,
+    existing_ids: set[str],
+) -> str:
+    suffix = part_index
+    while True:
+        candidate = f"{base_ticket_id}-S{attempt}-{suffix}"
+        if candidate not in existing_ids:
+            return candidate
+        suffix += 1
+
+
+async def _auto_split_failed_ticket(
+    conversation_id: int,
+    ticket: Ticket,
+    user_id: int,
+    conversation: Conversation,
+    db: Session,
+) -> bool:
+    """
+    Self-heal path for oversized tickets:
+    - Detect max-token failure
+    - Split failed ticket into smaller sequential tickets
+    - Rewire downstream dependencies from parent -> final split child
+    """
+    if ticket.status != "failed" or not _is_max_token_failure(ticket):
+        return False
+
+    current_attempt = _split_attempt_from_labels(ticket.labels)
+    next_attempt = current_attempt + 1
+    if next_attempt > _AUTO_SPLIT_MAX_ATTEMPTS:
+        logger.warning(
+            "Auto-split limit reached for ticket %s (attempts=%d).",
+            ticket.ticket_id, current_attempt,
+        )
+        return False
+
+    from services import pm_agent as pm_svc
+
+    split_request = {
+        "id": ticket.ticket_id,
+        "type": ticket.type,
+        "title": ticket.title,
+        "description": ticket.description,
+        "priority": ticket.priority,
+        "phase": ticket.phase,
+        "sequence": ticket.sequence,
+        "dependsOn": ticket.depends_on or [],
+        "labels": ticket.labels or [],
+    }
+
+    split_parts: list[dict] = []
+    try:
+        split_parts = await asyncio.to_thread(
+            pm_svc.split_ticket_for_recovery,
+            split_request,
+            _AUTO_SPLIT_MAX_PARTS,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Auto-split planner failed for ticket %s: %s", ticket.ticket_id, exc,
+        )
+
+    if not split_parts:
+        split_parts = _fallback_split_parts(ticket)
+
+    existing_ids = {
+        tid for (tid,) in db.query(Ticket.ticket_id)
+        .filter(Ticket.conversation_id == conversation_id)
+        .all()
+    }
+
+    now = datetime.utcnow()
+    base_sequence = ticket.sequence or 1
+    base_labels = list(ticket.labels or [])
+    child_labels = _dedupe_keep_order(
+        base_labels + [
+            "auto_split_child",
+            f"auto_split_parent:{ticket.ticket_id}",
+            f"auto_split_attempt:{next_attempt}",
+        ]
+    )
+
+    created_children: list[Ticket] = []
+    previous_child_id: str | None = None
+    total_parts = len(split_parts)
+    sp_per_child = None
+    if isinstance(ticket.story_points, int) and ticket.story_points > 0:
+        sp_per_child = max(1, round(ticket.story_points / max(total_parts, 1)))
+
+    for idx, part in enumerate(split_parts, start=1):
+        child_ticket_id = _next_split_ticket_id(
+            ticket.ticket_id,
+            next_attempt,
+            idx,
+            existing_ids,
+        )
+        existing_ids.add(child_ticket_id)
+
+        if previous_child_id is None:
+            child_depends = list(ticket.depends_on or [])
+        else:
+            child_depends = [previous_child_id]
+
+        child = Ticket(
+            conversation_id=conversation_id,
+            ticket_id=child_ticket_id,
+            jira_issue_key=None,
+            type=ticket.type,
+            phase=part.get("phase") or ticket.phase,
+            sequence=base_sequence + (idx - 1),
+            depends_on=child_depends,
+            priority=part.get("priority") or ticket.priority,
+            title=part.get("title") or f"{ticket.title} - Part {idx}",
+            description=part.get("description") or ticket.description,
+            story_points=sp_per_child,
+            labels=list(child_labels),
+            status="pending",
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(child)
+        created_children.append(child)
+        previous_child_id = child_ticket_id
+
+    # Parent ticket is superseded by the split children.
+    final_child_id = created_children[-1].ticket_id
+    parent_labels = _dedupe_keep_order(
+        base_labels + [
+            "auto_split_parent_resolved",
+            f"auto_split_attempt:{next_attempt}",
+        ]
+    )
+    ticket.labels = parent_labels
+    ticket.status = "done"
+    ticket.updated_at = now
+    split_note = (
+        "\n[AUTO_SPLIT] This ticket exceeded model token limits and was automatically "
+        f"split into {', '.join(c.ticket_id for c in created_children)}. "
+        f"Downstream dependencies were rewired to {final_child_id}."
+    )
+    ticket.error_msg = (ticket.error_msg or "") + split_note
+    ticket.agent_output = json.dumps(
+        {
+            "auto_split": True,
+            "attempt": next_attempt,
+            "children": [c.ticket_id for c in created_children],
+            "replacement_dependency": final_child_id,
+        }
+    )
+
+    # Rewrite downstream dependencies from parent ticket ID to last split child.
+    final_child_sequence = created_children[-1].sequence or base_sequence
+    downstream = (
+        db.query(Ticket)
+        .filter(Ticket.conversation_id == conversation_id, Ticket.id != ticket.id)
+        .all()
+    )
+    for row in downstream:
+        deps = list(row.depends_on or [])
+        if ticket.ticket_id not in deps:
+            continue
+
+        row.depends_on = _dedupe_keep_order([
+            final_child_id if dep == ticket.ticket_id else dep
+            for dep in deps
+        ])
+        if row.status == "pending" and row.sequence is not None and row.sequence <= final_child_sequence:
+            row.sequence = final_child_sequence + 1
+        row.updated_at = now
+
+    db.commit()
+    for child in created_children:
+        db.refresh(child)
+
+    # Best-effort Jira mirroring for split children so the board stays in sync.
+    if conversation.jira_project_key:
+        try:
+            from services.jira_service import push_tickets_to_jira
+
+            jira_payload = [
+                {
+                    "id": c.ticket_id,
+                    "type": c.type,
+                    "title": c.title,
+                    "description": c.description,
+                    "priority": c.priority or "Medium",
+                    "phase": c.phase,
+                    "sequence": c.sequence,
+                    "dependsOn": c.depends_on or [],
+                    "storyPoints": c.story_points,
+                    "labels": c.labels or [],
+                }
+                for c in created_children
+            ]
+
+            jira_results = await push_tickets_to_jira(
+                user_id=user_id,
+                db=db,
+                tickets=jira_payload,
+                project_key=conversation.jira_project_key,
+            )
+
+            key_by_ticket_id = {
+                r.get("ticket_id"): r.get("key")
+                for r in jira_results
+                if isinstance(r, dict) and r.get("ticket_id") and r.get("key")
+            }
+
+            mirrored = 0
+            for child in created_children:
+                jira_key = key_by_ticket_id.get(child.ticket_id)
+                if jira_key:
+                    child.jira_issue_key = jira_key
+                    child.updated_at = datetime.utcnow()
+                    mirrored += 1
+
+            if mirrored:
+                db.commit()
+
+            failed = [r for r in jira_results if isinstance(r, dict) and "error" in r]
+            if failed:
+                logger.warning(
+                    "Auto-split Jira mirroring partial failure for %s: %d/%d created.",
+                    ticket.ticket_id,
+                    mirrored,
+                    len(created_children),
+                )
+        except Exception as exc:
+            logger.warning(
+                "Auto-split Jira mirroring failed for %s: %s",
+                ticket.ticket_id,
+                exc,
+            )
+
+    logger.info(
+        "Auto-split applied for %s (attempt=%d): %s",
+        ticket.ticket_id,
+        next_attempt,
+        [c.ticket_id for c in created_children],
+    )
+    return True
 
 
 # ── Single ticket execution ───────────────────────────────────────────────────
@@ -415,25 +711,44 @@ async def run_all_tickets(
             *[run_ticket(t.id, user_id, conversation, db) for t in batch],
             return_exceptions=True,
         )
-        for i, ok in enumerate(results):
-            if ok is True:
+        for i, outcome in enumerate(results):
+            t = batch[i]
+            if outcome is True:
                 done_count += 1
-            elif isinstance(ok, Exception):
+                continue
+
+            if isinstance(outcome, Exception):
                 # asyncio.gather caught an unhandled exception
-                fail_count += 1
-                t = batch[i]
                 ticket_row = db.get(Ticket, t.id)
                 if ticket_row and ticket_row.status != "failed":
                     ticket_row.status    = "failed"
-                    ticket_row.error_msg = _build_error_msg(ok, "unhandled_gather_exception")
+                    ticket_row.error_msg = _build_error_msg(outcome, "unhandled_gather_exception")
                     ticket_row.updated_at = datetime.utcnow()
                     db.commit()
                 logger.exception(
                     "Unhandled exception in asyncio.gather for ticket %s: %s",
-                    t.ticket_id, ok,
+                    t.ticket_id, outcome,
                 )
-            else:
-                fail_count += 1
+
+            ticket_row = db.get(Ticket, t.id)
+            split_recovered = False
+            if ticket_row:
+                split_recovered = await _auto_split_failed_ticket(
+                    conversation_id,
+                    ticket_row,
+                    user_id,
+                    conversation,
+                    db,
+                )
+
+            if split_recovered:
+                logger.info(
+                    "Recovered oversized ticket %s via auto-split.",
+                    t.ticket_id,
+                )
+                continue
+
+            fail_count += 1
 
     all_tickets   = db.query(Ticket).filter(Ticket.conversation_id == conversation_id).all()
     still_pending = sum(1 for t in all_tickets if t.status in ("pending", "in_progress"))
@@ -482,31 +797,116 @@ async def run_all_tickets(
             is_script, is_mobile_app, is_devops_program, has_mixed_technologies,
         )
 
-        # 1. Deploy to Netlify (frontend / full-stack projects only).
-        # For backend-only, scripts, and DevOps projects there is nothing to deploy
-        # to a static host, so we skip this step entirely.
+        repo_full_name = f"{org_name}/{repo}"
+        repo_github_url = f"https://github.com/{org_name}/{repo}"
+
+        # ── Double-Step Deployment ────────────────────────────────────────────
+        #
+        # For full-stack projects the deployment order is strictly:
+        #
+        #   Step 1 — Railway: create a service in the Production Hub and capture
+        #             the public backend URL before any frontend config is written.
+        #
+        #   Step 2 — Write netlify.toml to GitHub with the real Railway URL so
+        #             the /api/* proxy is set correctly BEFORE Netlify builds.
+        #
+        #   Step 3 — Create the Netlify site; its FIRST build reads netlify.toml
+        #             from the repo and uses the correct proxy immediately.
+        #
+        # This avoids a second Netlify build solely to fix the proxy target.
+
+        # ── Step 1: Deploy backend to Railway ────────────────────────────────
+        backend_url: str | None = None
+        if has_backend:
+            try:
+                from infrastructure.railway_client import (
+                    create_production_service,
+                    RailwayError,
+                    RailwayConflictError,
+                    RailwayAuthError,
+                    RailwayRateLimitError,
+                )
+                backend_url = create_production_service(
+                    repo_url=repo_github_url,
+                    service_name=repo,
+                )
+                logger.info(
+                    "Step 1 ✓ Railway backend live for %s → %s", repo, backend_url,
+                )
+            except RailwayConflictError as exc:
+                logger.error(
+                    "Railway service name '%s' already exists in the Production Hub. "
+                    "Skipping Railway deployment — netlify.toml proxy will be omitted. "
+                    "Details: %s",
+                    repo, exc,
+                )
+            except RailwayAuthError as exc:
+                logger.error(
+                    "Railway auth error for %s: %s — "
+                    "check RAILWAY_API_TOKEN in .env.", repo, exc,
+                )
+            except RailwayRateLimitError as exc:
+                logger.error(
+                    "Railway rate limit hit for %s: %s — "
+                    "the factory will continue without Railway deployment.", repo, exc,
+                )
+            except RailwayError as exc:
+                logger.error(
+                    "Railway deployment failed for %s: %s — "
+                    "continuing without backend URL.", repo, exc,
+                )
+            except Exception as exc:
+                logger.exception(
+                    "Unexpected error during Railway deployment for %s: %s", repo, exc,
+                )
+
+        # ── Step 2: Write netlify.toml to GitHub (full-stack only) ───────────
+        # Must happen BEFORE the Netlify site is created so the proxy config
+        # is in the repo when Netlify's first build runs.
+        if is_full_stack and has_frontend:
+            if backend_url:
+                try:
+                    from services.netlify_service import write_netlify_toml
+                    ok = write_netlify_toml(repo_name=repo, backend_url=backend_url)
+                    if ok:
+                        logger.info(
+                            "Step 2 ✓ netlify.toml committed to %s (proxy → %s).",
+                            repo, backend_url,
+                        )
+                    else:
+                        logger.warning(
+                            "Step 2 ✗ netlify.toml write failed for %s — "
+                            "Netlify will build without proxy config.", repo,
+                        )
+                except Exception as exc:
+                    logger.exception(
+                        "Failed to write netlify.toml for %s: %s", repo, exc,
+                    )
+            else:
+                logger.warning(
+                    "Step 2 skipped — no backend_url available for %s. "
+                    "netlify.toml proxy will not be configured.", repo,
+                )
+
+        # ── Step 3: Create Netlify site ───────────────────────────────────────
+        # netlify.toml is already in the repo; Netlify reads it on first build.
         live_url: str | None = None
         if has_frontend:
             try:
                 from services.netlify_service import create_netlify_site
-
-                repo_full_name = f"{org_name}/{repo}"
-
                 netlify_result = create_netlify_site(
                     site_name=repo,
                     repo_full_name=repo_full_name,
-                    is_full_stack=is_full_stack,
                 )
                 if netlify_result:
                     live_url = netlify_result["site_url"]
                     logger.info(
-                        "Netlify site configured for %s → %s", repo, live_url,
+                        "Step 3 ✓ Netlify site ready for %s → %s", repo, live_url,
                     )
                 else:
                     logger.warning(
-                        "Netlify site creation returned None for %s — "
-                        "README will omit the live URL.",
-                        repo,
+                        "Step 3 ✗ Netlify site creation returned None for %s — "
+                        "README will omit the live URL.", repo,
                     )
             except Exception as exc:
                 logger.exception(
@@ -514,8 +914,7 @@ async def run_all_tickets(
                 )
         else:
             logger.info(
-                "No frontend for %s (has_frontend=False) — skipping Netlify deployment.",
-                repo,
+                "has_frontend=False for %s — skipping Netlify deployment.", repo,
             )
 
         # 2. Generate and commit a README.md from the chat history.

@@ -36,6 +36,9 @@ Respond with a SINGLE JSON object and nothing else — no preamble, no explanati
 - Never create or modify any file outside `frontend/`
 - Do not add extra features beyond what the ticket acceptance criteria describe
 - `action` must be `"create"` for new files or `"update"` for files that already exist
+- Keep output token-efficient: avoid overly long decorative CSS/JS when concise code satisfies the ticket
+- If scope is broad, return a minimum viable implementation that fully meets acceptance criteria
+- Prefer updating existing files over creating many new files unless required by the ticket
 """
 
 

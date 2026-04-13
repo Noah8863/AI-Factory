@@ -408,7 +408,7 @@ async def _create_single_ticket(
     Create a single Jira issue.  Returns {"id": ..., "key": ..., "url": ...}.
 
     ticket fields expected (from PM agent JSON):
-        title, description, priority, labels, type (backend | frontend)
+        id, title, description, priority, labels, type (backend | frontend)
     """
     url = f"https://api.atlassian.com/ex/jira/{cloud_id}/rest/api/3/issue"
 
@@ -503,6 +503,7 @@ async def _create_single_ticket(
                 exc.response.text,
             )
             return {
+                "ticket_id": ticket.get("id"),
                 "error":  exc.response.text,
                 "title":  ticket.get("title"),
                 "status": exc.response.status_code,
@@ -511,6 +512,7 @@ async def _create_single_ticket(
     created = resp.json()
     site_url = f"https://api.atlassian.com/ex/jira/{cloud_id}"  # approximate; real URL in accessible-resources
     return {
+        "ticket_id": ticket.get("id"),
         "id":    created["id"],
         "key":   created["key"],
         "title": ticket.get("title"),

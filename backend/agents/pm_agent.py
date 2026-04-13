@@ -19,11 +19,11 @@ deliberate preference for the kind of project they want to build.
    Keep it warm and brief (e.g., "Nice, let's build a Web App!" or "A Script / CLI tool — keeping it focused.").
    Do NOT ask whether the type is correct or offer to change it.
 2. Use it to **immediately set your scope tier** — skip re-detecting scope from the message body:
-   - "Web App"      → Tier 3 (full-stack, 5–8 questions, 8–15 tickets)
-   - "Backend API"  → Tier 2 (3–5 questions, 4–8 tickets)
+  - "Web App"      → Tier 3 (full-stack, 5–8 questions, as many tickets as needed; usually 8+)
+  - "Backend API"  → Tier 2 (3–5 questions, as many tickets as needed; usually 4+)
    - "Script / CLI" → Tier 1 (1–2 questions, 1–3 tickets)
-   - "Mobile App"   → Tier 3 (5–8 questions, 8–15 tickets)
-   - "DevOps Tool"  → Tier 2 (3–5 questions, 4–8 tickets)
+  - "Mobile App"   → Tier 3 (5–8 questions, as many tickets as needed; usually 8+)
+  - "DevOps Tool"  → Tier 2 (3–5 questions, as many tickets as needed; usually 4+)
 3. **Skip any project-type question** — go straight to your first clarifying question about features,
    users, or constraints.
 
@@ -216,20 +216,24 @@ this ticket can begin. Leave as an empty array [] if there are no prerequisites.
 ### Ticket generation rules
 - Separate tickets by type: backend or frontend
 - Each ticket must be completable in 1–2 days by a single developer
+- There is NO hard maximum ticket count. Generate as many tickets as needed to keep scopes small and token-safe.
+- Never force work into a fixed number of tickets. If a ticket becomes broad, split it into additional tickets.
+- Avoid catch-all tickets such as "Polish and finalize the app" or "Complete all remaining frontend work".
+- If any ticket would require large multi-file rewrites or long code output, split it before finalizing the plan.
 - Write descriptions with clear acceptance criteria ("Given X, when Y, then Z")
 - Scale ticket count and question count to the detected scope tier:
     Tier 1 — Simple script / CLI tool (is_script: true)
       • Ask 1–2 questions maximum
-      • Produce 1–3 tickets total
+      • Produce 1+ tickets (usually 1–3)
       • No Foundation/Core/Polish split required — flat sequence is fine
       • Signal __PM_READY__ after 1–2 exchanges
     Tier 2 — Backend API or moderate-scope project (has_backend, no frontend)
       • Ask 3–5 questions
-      • Produce 4–8 tickets
+      • Produce 4+ tickets (split further whenever any ticket exceeds 1–2 days)
       • Signal __PM_READY__ after 3–4 exchanges
     Tier 3 — Full-stack or complex system (has_frontend + has_backend)
       • Ask 5–8 questions
-      • Produce 8–15 tickets
+      • Produce 8+ tickets (no cap; keep splitting until each ticket is atomic)
       • Signal __PM_READY__ after 5–7 exchanges
   Never generate more tickets than the scope warrants. A trivial rename script
   must not get a Foundation ticket, a Core ticket, and a Polish ticket.
@@ -275,12 +279,26 @@ def parse_agent_reply(raw: str) -> dict:
     display_text = raw.replace("__PM_READY__", "").strip()
 
     tickets = None
-    json_match = re.search(r"```json\n([\s\S]*?)\n```", raw)
+
+    # 1) Preferred: fenced JSON block
+    json_match = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", raw)
     if json_match:
+      try:
+        tickets = json.loads(json_match.group(1))
+      except json.JSONDecodeError as e:
+        print(f"Failed to parse fenced ticket JSON: {e}")
+
+    # 2) Fallback: parse first JSON object found in raw text
+    if tickets is None:
+      first_brace = raw.find("{")
+      if first_brace >= 0:
         try:
-            tickets = json.loads(json_match.group(1))
+          decoder = json.JSONDecoder()
+          parsed_obj, _ = decoder.raw_decode(raw[first_brace:])
+          if isinstance(parsed_obj, dict):
+            tickets = parsed_obj
         except json.JSONDecodeError as e:
-            print(f"Failed to parse ticket JSON: {e}")
+          print(f"Failed to parse inline ticket JSON: {e}")
 
     # Determine the UI phase to send back to the frontend
     if tickets:

@@ -5,6 +5,7 @@ Calls the Backend Developer AI agent for a single Jira ticket and writes
 the generated files directly to the main branch of the target GitHub repository.
 """
 
+import asyncio
 import logging
 import os
 
@@ -54,14 +55,18 @@ async def run_backend_task(
         ticket.ticket_id, ticket.title,
     )
 
-    # ── 1. Call LLM ───────────────────────────────────────────────────────────
-    try:
-        response = _client.messages.create(
+    async def _call_backend_model(prompt: str):
+        return await asyncio.to_thread(
+            _client.messages.create,
             model="claude-sonnet-4-6",
             max_tokens=16384,
             system=system_msg,
-            messages=[{"role": "user", "content": ticket_prompt}],
+            messages=[{"role": "user", "content": prompt}],
         )
+
+    # ── 1. Call LLM ───────────────────────────────────────────────────────────
+    try:
+        response = await _call_backend_model(ticket_prompt)
     except anthropic.APIConnectionError as exc:
         raise RuntimeError(
             f"Anthropic API connection failed for ticket {ticket.ticket_id}: {exc}"
@@ -84,15 +89,55 @@ async def run_backend_task(
         ticket.ticket_id, len(raw), stop_reason,
     )
 
-    if stop_reason == "max_tokens":
-        raise RuntimeError(
-            f"Backend agent response truncated (hit max_tokens) for ticket "
-            f"{ticket.ticket_id}. Output was {len(raw)} chars. "
-            f"The generated code was too long to fit in one response."
-        )
-
     # ── 2. Parse output ───────────────────────────────────────────────────────
     result = parse_developer_output(raw)
+
+    if stop_reason == "max_tokens" and not result.get("files"):
+        logger.warning(
+            "Backend agent output truncated with no parseable files for ticket %s; retrying in recovery mode.",
+            ticket.ticket_id,
+        )
+        recovery_prompt = (
+            f"{ticket_prompt}\n\n"
+            "RECOVERY MODE: Your previous response was truncated by max_tokens. "
+            "Return only a compact, minimum-viable implementation for this ticket. "
+            "Prefer updating existing files. Limit output to essential files only. "
+            "Respond with one valid JSON object exactly matching the required schema."
+        )
+        try:
+            recovery_response = await _call_backend_model(recovery_prompt)
+            raw = recovery_response.content[0].text
+            stop_reason = recovery_response.stop_reason
+            result = parse_developer_output(raw)
+            logger.info(
+                "Backend recovery response for ticket %s: %d chars, stop_reason=%s",
+                ticket.ticket_id, len(raw), stop_reason,
+            )
+        except anthropic.APIConnectionError as exc:
+            raise RuntimeError(
+                f"Anthropic API connection failed during recovery for ticket {ticket.ticket_id}: {exc}"
+            ) from exc
+        except anthropic.RateLimitError as exc:
+            raise RuntimeError(
+                f"Anthropic rate limit hit during recovery for ticket {ticket.ticket_id}. "
+                f"Retry after a short wait. Details: {exc}"
+            ) from exc
+        except anthropic.APIStatusError as exc:
+            raise RuntimeError(
+                f"Anthropic API error during recovery ({exc.status_code}) for ticket {ticket.ticket_id}: "
+                f"{exc.message}"
+            ) from exc
+
+    if stop_reason == "max_tokens" and not result.get("files"):
+        raise RuntimeError(
+            f"Backend agent response truncated (hit max_tokens) for ticket "
+            f"{ticket.ticket_id} even after recovery retry. Output was {len(raw)} chars."
+        )
+    if stop_reason == "max_tokens" and result.get("files"):
+        logger.warning(
+            "Backend ticket %s hit max_tokens but returned parseable files; proceeding.",
+            ticket.ticket_id,
+        )
 
     if not result.get("files"):
         logger.warning(
@@ -122,7 +167,8 @@ async def run_backend_task(
 
             try:
                 summary = result.get("summary", ticket.title)
-                ok = write_file_to_repo(
+                ok = await asyncio.to_thread(
+                    write_file_to_repo,
                     repo_name=repo_name,
                     file_path=path,
                     content=content,

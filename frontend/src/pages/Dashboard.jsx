@@ -153,6 +153,14 @@ export default function Dashboard() {
   // ── Session-expired state ────────────────────────────────────
   const [sessionExpired, setSessionExpired] = useState(false)
 
+  // Keep polling single-flight to avoid piling up pending /tickets requests.
+  const ticketsRequestInFlightRef = useRef(false)
+  const activeConversationIdRef = useRef(null)
+
+  useEffect(() => {
+    activeConversationIdRef.current = conversation?.id ?? null
+  }, [conversation?.id])
+
   // ── Auth guard ───────────────────────────────────────────────
   useEffect(() => { if (!user) navigate('/login') }, [])
 
@@ -205,24 +213,48 @@ export default function Dashboard() {
 
   // ── Fetch ticket status on demand ───────────────────────────
   const fetchTickets = useCallback(async (convId) => {
-    if (!convId) return
+    if (!convId || ticketsRequestInFlightRef.current) return
+
+    ticketsRequestInFlightRef.current = true
     try {
-      const res = await getAgentTickets(convId)
+      const res = await getAgentTickets(convId, { timeout: 15000 })
+
+      // Ignore stale responses that arrive after the user switches conversations.
+      if (activeConversationIdRef.current !== convId) return
+
       const { tickets, still_pending } = res.data
       setAgentTickets(tickets ?? [])
       setDevInProcess((still_pending ?? 0) > 0)
-    } catch {
+    } catch (err) {
+      // Timeouts/network blips should not clear state or stop polling.
+      if (err?.code === 'ECONNABORTED' || err?.code === 'ERR_NETWORK') return
+
       // No tickets yet for this conversation — clear any stale state
-      setAgentTickets([])
-      setDevInProcess(false)
+      if (activeConversationIdRef.current === convId) {
+        setAgentTickets([])
+        setDevInProcess(false)
+      }
+    } finally {
+      ticketsRequestInFlightRef.current = false
     }
   }, [])
 
   // ── Poll ticket status while agents are running ──────────────
   useEffect(() => {
     if (!devInProcess || !conversation?.id) return
-    const interval = setInterval(() => fetchTickets(conversation.id), 1000)
-    return () => clearInterval(interval)
+
+    let cancelled = false
+    const tick = async () => {
+      if (cancelled) return
+      await fetchTickets(conversation.id)
+    }
+
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [devInProcess, conversation?.id, fetchTickets])
 
 

@@ -83,8 +83,8 @@ export const runAgents = (conversationId) =>
   api.post(`/agents/${conversationId}/run`)
 
 /** Poll ticket execution status for a conversation. */
-export const getAgentTickets = (conversationId) =>
-  api.get(`/agents/${conversationId}/tickets`)
+export const getAgentTickets = (conversationId, config = {}) =>
+  api.get(`/agents/${conversationId}/tickets`, config)
 
 /** Retry a single failed ticket and re-queue agent execution. */
 export const retryTicket = (conversationId, ticketDbId) =>

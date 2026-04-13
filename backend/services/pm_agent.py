@@ -9,6 +9,8 @@ never exposed to the frontend or to any client-side code.
 
 import logging
 import os
+import json
+import re
 
 from dotenv import load_dotenv
 import anthropic
@@ -25,6 +27,243 @@ _MODEL  = "claude-sonnet-4-20250514"
 # The exact message the route sends (and the system prompt expects) to trigger
 # ticket generation.  Defined here so routes and tests can import it.
 TASKING_ACTION_MESSAGE = "ACTION: Start tasking. Generate the Jira tickets now."
+
+_TAG_KEYS = (
+    "has_frontend",
+    "has_backend",
+    "is_script",
+    "is_mobile_app",
+    "is_devops_program",
+    "is_full_stack",
+    "has_mixed_technologies",
+)
+
+_OVERSIZED_DESCRIPTION_CHARS = 1300
+_OVERSIZED_TICKET_RE = re.compile(
+    r"\b(polish|finalize|complete\s+all|end[-\s]?to[-\s]?end|entire\s+app|whole\s+app|everything\s+left)\b",
+    re.IGNORECASE,
+)
+
+_TICKET_REBALANCE_SYSTEM_PROMPT = """
+You are a ticket-plan rebalancer.
+
+You receive a previously generated PM ticket JSON payload.
+Rewrite it into a finer-grained, dependency-safe plan that avoids oversized
+tickets that cause downstream developer max-token truncation.
+
+Rules:
+- Output only ONE JSON object in the same schema.
+- Preserve project metadata (projectName, projectSummary, githubRepoName, jiraProjectKey, projectTags).
+- Keep all seven projectTags keys and enforce is_full_stack = has_frontend AND has_backend.
+- There is no hard maximum ticket count. Split broad tickets aggressively.
+- Every ticket must be atomic and realistically finishable in 1 day (2 days max).
+- Avoid catch-all tickets like "polish/finalize the whole app".
+- Keep valid dependency ordering and sequence values.
+- Use IDs like BE-N and FE-N with unique numbering.
+- Every ticket labels list must include every projectTags key whose value is true.
+
+Return JSON only. No prose.
+"""
+
+_FAILED_TICKET_SPLIT_SYSTEM_PROMPT = """
+You are a recovery planner that splits one oversized engineering ticket into
+smaller, sequential tickets to avoid model max-token truncation.
+
+Return ONLY one JSON object in this exact shape:
+{
+  "splitTickets": [
+    {
+      "title": "string",
+      "description": "string",
+      "priority": "High|Medium|Low",
+      "phase": "Foundation|Core|Integration|Polish"
+    }
+  ]
+}
+
+Rules:
+- Output 2 to 4 splitTickets (never 1).
+- Each ticket must be atomic and realistically finishable in <= 1 day.
+- Keep acceptance criteria concise and implementation-focused.
+- Avoid catch-all wording like "finalize everything" or "complete remaining app".
+- Preserve the original ticket intent; do not add unrelated features.
+- Keep priority/phase reasonable for each split.
+"""
+
+
+def _parse_json_object(raw_text: str) -> dict | None:
+    idx = raw_text.find("{")
+    if idx >= 0:
+        decoder = json.JSONDecoder()
+        try:
+            obj, _ = decoder.raw_decode(raw_text, idx)
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+
+    fenced = re.search(r"```(?:json)?\s*\n([\s\S]*?)\n```", raw_text)
+    if fenced:
+        try:
+            obj = json.loads(fenced.group(1))
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def split_ticket_for_recovery(ticket_payload: dict, max_parts: int = 3) -> list[dict]:
+    """
+    Split one oversized failed ticket into smaller tickets for auto-recovery.
+
+    Returns a normalized list of split tickets, or [] when parsing/generation fails.
+    """
+    title = (ticket_payload.get("title") or "").strip()
+    description = (ticket_payload.get("description") or "").strip()
+    if not title or not description:
+        return []
+
+    max_parts = max(2, min(max_parts, 4))
+    prompt = (
+        "Split this failed oversized ticket into smaller sequential tickets.\n"
+        f"Ticket ID: {ticket_payload.get('id', '')}\n"
+        f"Type: {ticket_payload.get('type', '')}\n"
+        f"Title: {title}\n"
+        f"Priority: {ticket_payload.get('priority', 'Medium')}\n"
+        f"Phase: {ticket_payload.get('phase', 'Core')}\n"
+        f"Current sequence: {ticket_payload.get('sequence', '')}\n"
+        f"DependsOn: {ticket_payload.get('dependsOn', [])}\n"
+        f"Acceptance criteria:\n{description}\n\n"
+        f"Return between 2 and {max_parts} splitTickets."
+    )
+
+    response = _client.messages.create(
+        model=_MODEL,
+        max_tokens=3072,
+        system=_FAILED_TICKET_SPLIT_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    parsed = _parse_json_object(response.content[0].text)
+    if not isinstance(parsed, dict):
+        return []
+
+    raw_split = parsed.get("splitTickets")
+    if not isinstance(raw_split, list):
+        return []
+
+    normalized: list[dict] = []
+    allowed_priority = {"High", "Medium", "Low"}
+    allowed_phase = {"Foundation", "Core", "Integration", "Polish"}
+    fallback_priority = ticket_payload.get("priority") if ticket_payload.get("priority") in allowed_priority else "Medium"
+    fallback_phase = ticket_payload.get("phase") if ticket_payload.get("phase") in allowed_phase else "Core"
+
+    for item in raw_split:
+        if not isinstance(item, dict):
+            continue
+        item_title = (item.get("title") or "").strip()
+        item_desc = (item.get("description") or "").strip()
+        if not item_title or not item_desc:
+            continue
+
+        item_priority = item.get("priority")
+        if item_priority not in allowed_priority:
+            item_priority = fallback_priority
+
+        item_phase = item.get("phase")
+        if item_phase not in allowed_phase:
+            item_phase = fallback_phase
+
+        normalized.append(
+            {
+                "title": item_title,
+                "description": item_desc,
+                "priority": item_priority,
+                "phase": item_phase,
+            }
+        )
+
+    if len(normalized) < 2:
+        return []
+
+    return normalized[:max_parts]
+
+
+def _normalize_project_tags(raw_tags: dict | list | None, fallback: dict | None = None) -> dict[str, bool]:
+    tags = {k: False for k in _TAG_KEYS}
+
+    if isinstance(fallback, dict):
+        for key in _TAG_KEYS:
+            if key in fallback:
+                tags[key] = bool(fallback[key])
+
+    if isinstance(raw_tags, dict):
+        for key in _TAG_KEYS:
+            if key in raw_tags:
+                tags[key] = bool(raw_tags[key])
+    elif isinstance(raw_tags, list):
+        for key in raw_tags:
+            if key in tags:
+                tags[key] = True
+
+    tags["is_full_stack"] = tags["has_frontend"] and tags["has_backend"]
+    return tags
+
+
+def _minimum_ticket_count(tags: dict[str, bool]) -> int:
+    if tags.get("is_script"):
+        return 1
+    if tags.get("has_frontend") and tags.get("has_backend"):
+        return 7
+    if tags.get("has_frontend") or tags.get("has_backend") or tags.get("is_mobile_app") or tags.get("is_devops_program"):
+        return 4
+    return 3
+
+
+def _needs_ticket_rebalance(tickets_payload: dict, tags: dict[str, bool]) -> bool:
+    tickets = tickets_payload.get("tickets") if isinstance(tickets_payload, dict) else None
+    if not isinstance(tickets, list) or not tickets:
+        return False
+
+    ticket_count = len(tickets)
+    longest_description = max(len((t.get("description") or "").strip()) for t in tickets)
+    broad_ticket_found = any(
+        _OVERSIZED_TICKET_RE.search(
+            f"{t.get('title', '')} {(t.get('description', '') or '')[:300]}"
+        )
+        for t in tickets
+    )
+
+    if tags.get("is_script"):
+        return longest_description > 1600 or (ticket_count == 1 and longest_description > 900)
+
+    return (
+        ticket_count < _minimum_ticket_count(tags)
+        or longest_description > _OVERSIZED_DESCRIPTION_CHARS
+        or (broad_ticket_found and ticket_count <= 5)
+    )
+
+
+def _rebalance_ticket_payload(original_payload: dict) -> dict | None:
+    prompt = (
+        "Rebalance this ticket plan into smaller, token-safe tickets.\n"
+        "Do not reduce quality; increase ticket granularity where needed.\n\n"
+        "Original ticket payload:\n"
+        f"```json\n{json.dumps(original_payload, indent=2)}\n```"
+    )
+
+    response = _client.messages.create(
+        model=_MODEL,
+        max_tokens=8192,
+        system=_TICKET_REBALANCE_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    parsed = parse_agent_reply(response.content[0].text)
+    rebalanced = parsed.get("tickets")
+    if isinstance(rebalanced, dict) and isinstance(rebalanced.get("tickets"), list) and rebalanced.get("tickets"):
+        return rebalanced
+    return None
 
 
 # ─── LLM caller ───────────────────────────────────────────────────────────────
@@ -96,11 +335,59 @@ async def run_tasking(
     raw    = _call_llm(tasking_history, max_tokens=4096)
     parsed = parse_agent_reply(raw)
 
+    # Recovery: if JSON was malformed/missing, ask once for strict JSON-only retry.
+    if parsed.get("tickets") is None:
+        logger.warning(
+            "run_tasking: first pass did not return parseable ticket JSON. Retrying once."
+        )
+        retry_history = tasking_history + [{
+            "role": "user",
+            "content": (
+                "Your previous response was malformed or incomplete. "
+                "Return ONLY the complete ticket JSON object in a ```json fenced block."
+            ),
+        }]
+        retry_raw = _call_llm(retry_history, max_tokens=6144)
+        retry_parsed = parse_agent_reply(retry_raw)
+        if retry_parsed.get("tickets") is not None:
+            parsed = retry_parsed
+
     if parsed.get("tickets") is None:
         logger.warning(
             "run_tasking: LLM response did not contain parseable ticket JSON. "
             "Raw output (first 500 chars): %s", raw[:500]
         )
+
+    tickets_payload = parsed.get("tickets")
+    if isinstance(tickets_payload, dict):
+        normalized_tags = _normalize_project_tags(
+            tickets_payload.get("projectTags"),
+            parsed.get("projectTags"),
+        )
+
+        if _needs_ticket_rebalance(tickets_payload, normalized_tags):
+            logger.info(
+                "run_tasking: ticket plan appears too coarse (count=%d). Rebalancing.",
+                len(tickets_payload.get("tickets", [])),
+            )
+            rebalanced = _rebalance_ticket_payload(tickets_payload)
+            if rebalanced is not None:
+                parsed["tickets"] = rebalanced
+                parsed["projectTags"] = _normalize_project_tags(
+                    rebalanced.get("projectTags"), normalized_tags
+                )
+                logger.info(
+                    "run_tasking: rebalanced ticket count %d -> %d.",
+                    len(tickets_payload.get("tickets", [])),
+                    len(rebalanced.get("tickets", [])),
+                )
+            else:
+                logger.warning(
+                    "run_tasking: ticket rebalancing failed parse; keeping original plan."
+                )
+                parsed["projectTags"] = normalized_tags
+        else:
+            parsed["projectTags"] = normalized_tags
 
     return {
         "agent_reply": parsed["displayText"],
