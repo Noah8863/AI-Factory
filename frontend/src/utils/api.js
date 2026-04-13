@@ -94,4 +94,8 @@ export const retryTicket = (conversationId, ticketDbId) =>
 export const cancelAgents = (conversationId) =>
   api.post(`/agents/${conversationId}/cancel`)
 
+/** Trigger deploy/redeploy workflow for a conversation. */
+export const deployIdea = (conversationId, mode = 'deploy') =>
+  api.post(`/agents/${conversationId}/deploy`, { mode })
+
 export default api

@@ -37,11 +37,13 @@ Double-Step deployment order (enforced by agent_runner.py)
 
 import logging
 import os
+from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+_BACKEND_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+load_dotenv(_BACKEND_ENV_PATH)
 
 logger = logging.getLogger(__name__)
 

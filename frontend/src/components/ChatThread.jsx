@@ -107,7 +107,10 @@ export default function ChatThread({
   taskingResult,
   isTaskingLoading,
   repoUrl,
+  deploymentStatus,
+  deploymentLiveUrl,
   devInProcess,
+  isDeployActionLoading,
   agentRunError,
   agentTickets,
   sessionExpired,
@@ -119,6 +122,8 @@ export default function ChatThread({
   onAddMoreRequirements,
   onRetryTicket,
   onRefreshTickets,
+  onDeployIdea,
+  onRedeployIdea,
   onCancelAgents,
   onGoToProfile,
   onBack,
@@ -148,6 +153,41 @@ export default function ChatThread({
   const [phraseVisible, setPhraseVisible] = useState(true)
   const prevShowReadyBannerRef = useRef(showReadyBanner)
   const stoppableTicketsCount = agentTickets.filter((ticket) => ['pending', 'in_progress'].includes(ticket.status)).length
+  const hasFrontendCapability = !!(
+    projectTags?.has_frontend ||
+    projectTags?.is_full_stack ||
+    agentTickets.some((ticket) => ticket.type === 'frontend')
+  )
+  const hasAnyTickets = agentTickets.length > 0
+  const allTicketsDone = hasAnyTickets && agentTickets.every((ticket) => ticket.status === 'done')
+  const hasSuccessfulDeployment = !!deploymentLiveUrl || deploymentStatus === 'deployed'
+
+  let deployControlMode = 'hidden'
+  let deployControlDisabled = false
+  let deployControlDisabledReason = ''
+
+  if (hasFrontendCapability && repoUrl) {
+    if (deploymentStatus === 'deploying' || (hasSuccessfulDeployment && devInProcess)) {
+      deployControlMode = 'deploying'
+    } else if (deploymentStatus === 'deployed' && !devInProcess) {
+      deployControlMode = 'deployed'
+    } else if (!hasSuccessfulDeployment && devInProcess) {
+      // First build in progress and not yet deployed: hide deploy controls.
+      deployControlMode = 'hidden'
+    } else if (hasSuccessfulDeployment) {
+      deployControlMode = 'redeploy'
+      deployControlDisabled = !!isDeployActionLoading
+      deployControlDisabledReason = isDeployActionLoading ? 'Starting redeploy...' : ''
+    } else {
+      deployControlMode = 'deploy'
+      deployControlDisabled = !allTicketsDone || !!isDeployActionLoading
+      if (!allTicketsDone) {
+        deployControlDisabledReason = 'Deploy Idea is enabled after all Jira tickets are completed.'
+      } else if (isDeployActionLoading) {
+        deployControlDisabledReason = 'Starting deployment...'
+      }
+    }
+  }
 
   useEffect(() => {
     if (!isTaskingLoading) return
@@ -377,7 +417,14 @@ export default function ChatThread({
           </div>
         </div>
         <div className="chat-thread__header-controls">
-          <ConnectionStatus />
+          <ConnectionStatus
+            mode={deployControlMode}
+            disabled={deployControlDisabled}
+            disabledReason={deployControlDisabledReason}
+            loading={!!isDeployActionLoading}
+            onDeploy={onDeployIdea}
+            onRedeploy={onRedeployIdea}
+          />
           {projectTypeLabel && (
             <div className="chat-thread__header-badge">
               <span className="material-icons">{projectTypeLabel.icon}</span>

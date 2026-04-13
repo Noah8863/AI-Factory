@@ -171,6 +171,9 @@ def get_idea_tickets(
     still_pending = sum(1 for t in tickets if t.status in ("pending", "in_progress"))
     return AgentRunResponse(
         conversation_id=conversation.id,
+        deployment_status=conversation.deployment_status,
+        deployment_live_url=conversation.deployment_live_url,
+        deployment_error=conversation.deployment_error,
         tickets=[TicketRead.model_validate(t) for t in tickets],
         done=done,
         failed=failed,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking, getAgentTickets, getIdeaTickets, retryTicket, cancelAgents } from '../utils/api'
+import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking, getAgentTickets, getIdeaTickets, retryTicket, cancelAgents, deployIdea } from '../utils/api'
 import ChatThread from '../components/ChatThread'
 import DevProgress from '../components/DevProgress'
 import Navbar from '../components/Navbar'
@@ -66,6 +66,9 @@ function normalizeConversation(conv) {
   return {
     ...conv,
     project_tags: normalizeProjectTags(conv.project_tags),
+    deployment_status: conv.deployment_status || 'not_deployed',
+    deployment_live_url: conv.deployment_live_url || null,
+    deployment_error: conv.deployment_error || null,
   }
 }
 
@@ -175,6 +178,7 @@ export default function Dashboard() {
   const [taskingResult, setTaskingResult] = useState(null)   // { jira_tickets_created, jira_error }
   const [isTaskingLoading, setIsTaskingLoading] = useState(false)
   const [devInProcess, setDevInProcess] = useState(false)
+  const [isDeployActionLoading, setIsDeployActionLoading] = useState(false)
   const [agentRunError, setAgentRunError] = useState('')
   const [agentTickets, setAgentTickets] = useState([])       // TicketRead[]
 
@@ -336,6 +340,18 @@ export default function Dashboard() {
       const { tickets, still_pending } = res.data
       setAgentTickets(tickets ?? [])
       setDevInProcess((still_pending ?? 0) > 0)
+
+      if (activeConversationIdRef.current === convId) {
+        setConversation((prev) => {
+          if (!prev || prev.id !== convId) return prev
+          return {
+            ...prev,
+            deployment_status: res.data.deployment_status || prev.deployment_status || 'not_deployed',
+            deployment_live_url: res.data.deployment_live_url ?? prev.deployment_live_url ?? null,
+            deployment_error: res.data.deployment_error ?? prev.deployment_error ?? null,
+          }
+        })
+      }
     } catch (err) {
       // Timeouts/network blips should not clear state or stop polling.
       if (err?.code === 'ECONNABORTED' || err?.code === 'ERR_NETWORK') return
@@ -352,7 +368,10 @@ export default function Dashboard() {
 
   // ── Poll ticket status while agents are running ──────────────
   useEffect(() => {
-    if (!devInProcess || !conversation?.id) return
+    const shouldPoll = !!conversation?.id && (
+      devInProcess || conversation?.deployment_status === 'deploying'
+    )
+    if (!shouldPoll) return
 
     let cancelled = false
     const tick = async () => {
@@ -366,7 +385,7 @@ export default function Dashboard() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [devInProcess, conversation?.id, fetchTickets])
+  }, [devInProcess, conversation?.id, conversation?.deployment_status, fetchTickets])
 
 
   // ── Fetch tickets for all ideas (My Ideas page) ─────────────
@@ -634,6 +653,29 @@ export default function Dashboard() {
 
   const handleContinueChat = () => setShowReadyBanner(false)
   const handleBackFromChat  = () => { setActiveNav('new'); setTaskingResult(null) }
+
+  const handleDeployIdea = async (mode = 'deploy') => {
+    if (!conversation || isDeployActionLoading) return
+    setIsDeployActionLoading(true)
+    setAgentRunError('')
+
+    try {
+      const res = await deployIdea(conversation.id, mode)
+      const nextConversation = normalizeConversation(res.data?.conversation)
+      if (nextConversation) {
+        setConversation(nextConversation)
+      } else {
+        setConversation((prev) => prev ? { ...prev, deployment_status: 'deploying', deployment_error: null } : prev)
+      }
+      // Start polling immediately so the header state transitions when deployment finishes.
+      await fetchTickets(conversation.id)
+    } catch (err) {
+      const detail = err?.response?.data?.detail || 'Failed to start deployment. Please try again.'
+      setAgentRunError(detail)
+    } finally {
+      setIsDeployActionLoading(false)
+    }
+  }
 
   // ── Retry a single failed ticket ─────────────────────────────
   const handleRetryTicket = async (ticketDbId) => {
@@ -1021,7 +1063,10 @@ export default function Dashboard() {
             taskingResult={taskingResult}
             isTaskingLoading={isTaskingLoading}
             repoUrl={conversation.github_repo_url ?? null}
+            deploymentStatus={conversation.deployment_status ?? 'not_deployed'}
+            deploymentLiveUrl={conversation.deployment_live_url ?? null}
             devInProcess={devInProcess}
+            isDeployActionLoading={isDeployActionLoading}
             agentRunError={agentRunError}
             agentTickets={agentTickets}
             jiraStatus={jiraStatus}
@@ -1036,6 +1081,8 @@ export default function Dashboard() {
             onAddMoreRequirements={handleAddMoreRequirements}
             onRetryTicket={handleRetryTicket}
             onRefreshTickets={handleRefreshTickets}
+            onDeployIdea={() => handleDeployIdea('deploy')}
+            onRedeployIdea={() => handleDeployIdea('redeploy')}
             onCancelAgents={handleCancelAgents}
             onGoToProfile={() => navigate('/profile')}
             onBack={handleBackFromChat}

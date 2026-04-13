@@ -70,6 +70,9 @@ class ConversationRead(BaseModel):
     project_tags:     dict[str, bool] | None = None
     github_repo_name: str | None = None
     github_repo_url:  str | None = None
+    deployment_status:   str = "not_deployed"
+    deployment_live_url: str | None = None
+    deployment_error:    str | None = None
     jira_project_key: str | None = None
     jira_project_url: str | None = None
     created_at: datetime

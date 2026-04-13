@@ -25,4 +25,7 @@ class AgentRunResponse(BaseModel):
     done:            int
     failed:          int
     still_pending:   int
+    deployment_status:   str | None = None
+    deployment_live_url: str | None = None
+    deployment_error:    str | None = None
     tickets:         list[TicketRead]

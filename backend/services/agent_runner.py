@@ -684,6 +684,7 @@ async def run_all_tickets(
     conversation_id: int,
     user_id: int,
     db: Session,
+    allow_incomplete_deploy: bool = False,
 ) -> dict:
     """
     Run all pending tickets for a conversation in dependency order.
@@ -778,14 +779,16 @@ async def run_all_tickets(
     all_tickets   = db.query(Ticket).filter(Ticket.conversation_id == conversation_id).all()
     still_pending = sum(1 for t in all_tickets if t.status in ("pending", "in_progress"))
     all_failed    = sum(1 for t in all_tickets if t.status == "failed")
+    total_tickets = len(all_tickets)
+    all_done      = total_tickets > 0 and all(t.status == "done" for t in all_tickets)
 
     logger.info(
         "run_all_tickets for conversation %s complete — done=%d failed=%d still_pending=%d",
         conversation_id, done_count, fail_count, still_pending,
     )
 
-    # ── Post-completion: Netlify deployment + README (only when every ticket is done) ─────
-    if still_pending == 0 and all_failed == 0 and conversation.github_repo_name:
+    # ── Post-completion: Netlify deployment + README ─────────────────────────────
+    if (all_done or allow_incomplete_deploy) and conversation.github_repo_name:
         import os
         from services.github_service import write_file_to_repo
 
@@ -801,7 +804,6 @@ async def run_all_tickets(
             is_script              = project_tags.get("is_script",              False)
             is_mobile_app          = project_tags.get("is_mobile_app",          False)
             is_devops_program      = project_tags.get("is_devops_program",      False)
-            is_full_stack          = project_tags.get("is_full_stack",          False)
             has_mixed_technologies = project_tags.get("has_mixed_technologies",  False)
         else:
             # Legacy fallback: derive from ticket types
@@ -810,8 +812,10 @@ async def run_all_tickets(
             is_script              = any(t.type == "script" for t in all_tickets)
             is_mobile_app          = False
             is_devops_program      = False
-            is_full_stack          = has_frontend and has_backend
             has_mixed_technologies = False
+
+        # Never trust persisted is_full_stack blindly; derive from FE+BE tags.
+        is_full_stack = has_frontend and has_backend
 
         logger.info(
             "All tickets done for conversation %s — running post-completion steps for %s "
@@ -824,6 +828,8 @@ async def run_all_tickets(
 
         repo_full_name = f"{org_name}/{repo}"
         repo_github_url = f"https://github.com/{org_name}/{repo}"
+        should_deploy_to_netlify = has_frontend or is_full_stack
+        deployment_error: str | None = None
 
         # ── Double-Step Deployment ────────────────────────────────────────────
         #
@@ -842,6 +848,12 @@ async def run_all_tickets(
 
         # ── Step 1: Deploy backend to Railway ────────────────────────────────
         backend_url: str | None = None
+        if should_deploy_to_netlify:
+            conversation.deployment_status = "deploying"
+            conversation.deployment_error = None
+            conversation.updated_at = datetime.utcnow()
+            db.commit()
+
         if has_backend:
             try:
                 from infrastructure.railway_client import (
@@ -916,7 +928,7 @@ async def run_all_tickets(
         # ── Step 3: Create Netlify site ───────────────────────────────────────
         # netlify.toml is already in the repo; Netlify reads it on first build.
         live_url: str | None = None
-        if has_frontend:
+        if should_deploy_to_netlify:
             try:
                 from services.netlify_service import create_netlify_site
                 netlify_result = create_netlify_site(
@@ -929,17 +941,19 @@ async def run_all_tickets(
                         "Step 3 ✓ Netlify site ready for %s → %s", repo, live_url,
                     )
                 else:
+                    deployment_error = "Netlify site creation returned no live URL."
                     logger.warning(
                         "Step 3 ✗ Netlify site creation returned None for %s — "
                         "README will omit the live URL.", repo,
                     )
             except Exception as exc:
+                deployment_error = f"Netlify site creation failed: {exc}"
                 logger.exception(
                     "Failed to create Netlify site for %s: %s", repo, exc,
                 )
         else:
             logger.info(
-                "has_frontend=False for %s — skipping Netlify deployment.", repo,
+                "Skipping Netlify deployment for %s — project is neither frontend nor full-stack.", repo,
             )
 
         # 2. Generate and commit a README.md from the chat history.
@@ -1027,8 +1041,22 @@ async def run_all_tickets(
                 "Failed to generate/commit CLAUDE.md for %s: %s", repo, exc,
             )
 
+        if should_deploy_to_netlify:
+            if live_url:
+                conversation.deployment_status = "deployed"
+                conversation.deployment_live_url = live_url
+                conversation.deployment_error = None
+            else:
+                conversation.deployment_status = "failed"
+                conversation.deployment_error = (
+                    deployment_error
+                    or "Deployment failed before a live URL was available."
+                )
+            conversation.updated_at = datetime.utcnow()
+            db.commit()
+
     # ── Update idea status based on final ticket outcomes ─────────────────────
-    if conversation and conversation.idea_id:
+    if not allow_incomplete_deploy and conversation and conversation.idea_id:
         from models.idea import Idea
         idea = db.get(Idea, conversation.idea_id)
         if idea:
@@ -1045,6 +1073,14 @@ async def run_all_tickets(
                 "Idea %s status → %s (done=%d, failed=%d, pending=%d)",
                 idea.id, idea.status, done_count, all_failed, still_pending,
             )
+
+    if conversation.github_repo_name and not all_done and conversation.deployment_status == "deploying":
+        conversation.deployment_status = "failed"
+        conversation.deployment_error = (
+            "Deployment skipped because not all Jira tickets are complete and passing."
+        )
+        conversation.updated_at = datetime.utcnow()
+        db.commit()
 
     return {
         "done":          done_count,
@@ -1067,5 +1103,39 @@ async def run_all_tickets_bg(conversation_id: int, user_id: int) -> None:
         logger.exception(
             "Background agent run failed for conversation %s.", conversation_id
         )
+    finally:
+        db.close()
+
+
+async def run_deploy_and_docs_bg(
+    conversation_id: int,
+    user_id: int,
+    allow_incomplete: bool = False,
+) -> None:
+    """
+    Background wrapper for manual Deploy Idea / Redeploy Idea actions.
+
+    Uses run_all_tickets with an optional deploy override so post-completion
+    deploy/docs can run even when some tickets are failed (manual redeploy mode).
+    """
+    db = SessionLocal()
+    try:
+        await run_all_tickets(
+            conversation_id,
+            user_id,
+            db,
+            allow_incomplete_deploy=allow_incomplete,
+        )
+    except Exception as exc:
+        logger.exception(
+            "Background deploy/docs run failed for conversation %s.",
+            conversation_id,
+        )
+        conversation = db.get(Conversation, conversation_id)
+        if conversation and conversation.deployment_status == "deploying":
+            conversation.deployment_status = "failed"
+            conversation.deployment_error = f"Manual deployment failed: {exc}"
+            conversation.updated_at = datetime.utcnow()
+            db.commit()
     finally:
         db.close()

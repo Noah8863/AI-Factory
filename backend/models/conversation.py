@@ -19,6 +19,10 @@ class Conversation(Base):
     # GitHub repo created when the user first clicks "Start Building"
     github_repo_name = Column(String(255), nullable=True)
     github_repo_url  = Column(String(512), nullable=True)
+    # Deployment lifecycle for frontend/full-stack projects.
+    deployment_status   = Column(String(32), default="not_deployed", nullable=False)
+    deployment_live_url = Column(String(512), nullable=True)
+    deployment_error    = Column(String(1024), nullable=True)
     # Jira project auto-created on first "Start Building"
     jira_project_key = Column(String(32),  nullable=True)
     jira_project_url = Column(String(512), nullable=True)

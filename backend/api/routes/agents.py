@@ -16,22 +16,34 @@ Routes for triggering and monitoring AI developer agent work.
 
 import logging
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, load_only
 
 from db.database import get_db
 from models.conversation import Conversation
 from models.idea import Idea
 from models.ticket import Ticket
+from schemas.conversation import ConversationRead
 from schemas.ticket import AgentRunResponse, TicketRead
-from services.agent_runner import get_runnable_tickets, run_all_tickets_bg
+from services.agent_runner import get_runnable_tickets, run_all_tickets_bg, run_deploy_and_docs_bg
 from services.auth_service import get_current_user
 from models.user import User
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
+
+
+class DeployRequest(BaseModel):
+    mode: Literal["deploy", "redeploy"] = "deploy"
+
+
+class DeployResponse(BaseModel):
+    conversation: ConversationRead
+    detail: str
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -151,6 +163,9 @@ async def run_agents(
     counts = _ticket_counts(tickets)
     return AgentRunResponse(
         conversation_id=conversation_id,
+        deployment_status=conversation.deployment_status,
+        deployment_live_url=conversation.deployment_live_url,
+        deployment_error=conversation.deployment_error,
         tickets=[TicketRead.model_validate(t) for t in tickets],
         **counts,
     )
@@ -163,11 +178,14 @@ def get_ticket_status(
     db:              Session = Depends(get_db),
 ):
     """Return current ticket statuses for a conversation (for polling)."""
-    _get_owned_conversation(conversation_id, current_user.id, db)
+    conversation = _get_owned_conversation(conversation_id, current_user.id, db)
     tickets = _status_tickets(conversation_id, db)
     counts = _ticket_counts(tickets)
     return AgentRunResponse(
         conversation_id=conversation_id,
+        deployment_status=conversation.deployment_status,
+        deployment_live_url=conversation.deployment_live_url,
+        deployment_error=conversation.deployment_error,
         tickets=[TicketRead.model_validate(t) for t in tickets],
         **counts,
     )
@@ -231,6 +249,8 @@ async def retry_ticket(
     ticket = db.get(Ticket, ticket_db_id)
     if not ticket or ticket.conversation_id != conversation_id:
         raise HTTPException(status_code=404, detail="Ticket not found.")
+
+    conversation = _get_owned_conversation(conversation_id, current_user.id, db)
     if ticket.status != "failed":
         raise HTTPException(status_code=400, detail="Only failed tickets can be retried.")
 
@@ -244,6 +264,96 @@ async def retry_ticket(
     counts = _ticket_counts(tickets)
     return AgentRunResponse(
         conversation_id=conversation_id,
+        deployment_status=conversation.deployment_status,
+        deployment_live_url=conversation.deployment_live_url,
+        deployment_error=conversation.deployment_error,
         tickets=[TicketRead.model_validate(t) for t in tickets],
         **counts,
+    )
+
+
+@router.post("/{conversation_id}/deploy", response_model=DeployResponse, status_code=202)
+async def deploy_idea(
+    conversation_id: int,
+    payload: DeployRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Trigger deployment/docs pipeline for a conversation.
+
+    mode="deploy":
+      - only allowed when every ticket is done
+    mode="redeploy":
+      - allowed even if some tickets failed (manual override)
+    """
+    conversation = _get_owned_conversation(conversation_id, current_user.id, db)
+
+    tickets = _status_tickets(conversation_id, db)
+    if not tickets:
+        raise HTTPException(
+            status_code=400,
+            detail="No tickets found for this conversation. Start building first.",
+        )
+
+    all_done = len(tickets) > 0 and all(t.status == "done" for t in tickets)
+    has_in_progress = any(t.status in ("pending", "in_progress") for t in tickets)
+
+    tags = conversation.project_tags or {}
+    if tags:
+        has_frontend = bool(tags.get("has_frontend", False))
+        has_backend = bool(tags.get("has_backend", False))
+    else:
+        has_frontend = any(t.type == "frontend" for t in tickets)
+        has_backend = any(t.type == "backend" for t in tickets)
+    is_full_stack = has_frontend and has_backend
+    can_deploy = has_frontend or is_full_stack
+
+    if not can_deploy:
+        raise HTTPException(
+            status_code=400,
+            detail="Only frontend or full-stack projects support deployment.",
+        )
+
+    if conversation.deployment_status == "deploying":
+        raise HTTPException(status_code=409, detail="Deployment is already in progress.")
+
+    if has_in_progress:
+        raise HTTPException(
+            status_code=400,
+            detail="Deployment actions are unavailable while tickets are still running.",
+        )
+
+    if payload.mode == "deploy":
+        if not all_done:
+            raise HTTPException(
+                status_code=400,
+                detail="Deploy Idea is available only after all Jira tickets are completed.",
+            )
+
+    conversation.deployment_status = "deploying"
+    conversation.deployment_error = None
+    conversation.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(conversation)
+
+    background_tasks.add_task(
+        run_deploy_and_docs_bg,
+        conversation_id,
+        current_user.id,
+        payload.mode == "redeploy",
+    )
+
+    action = "Redeploy" if payload.mode == "redeploy" else "Deploy"
+    logger.info(
+        "%s requested for conversation %s by user %s.",
+        action,
+        conversation_id,
+        current_user.id,
+    )
+
+    return DeployResponse(
+        conversation=ConversationRead.model_validate(conversation),
+        detail=f"{action} started.",
     )

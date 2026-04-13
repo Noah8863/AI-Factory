@@ -42,6 +42,15 @@ with engine.connect() as _conn:
         "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS github_repo_url VARCHAR(512)"
     ))
     _conn.execute(text(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS deployment_status VARCHAR(32) NOT NULL DEFAULT 'not_deployed'"
+    ))
+    _conn.execute(text(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS deployment_live_url VARCHAR(512)"
+    ))
+    _conn.execute(text(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS deployment_error VARCHAR(1024)"
+    ))
+    _conn.execute(text(
         "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS jira_project_key VARCHAR(32)"
     ))
     _conn.execute(text(
@@ -52,6 +61,9 @@ with engine.connect() as _conn:
     ))
     _conn.execute(text(
         "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_tags JSON"
+    ))
+    _conn.execute(text(
+        "UPDATE conversations SET deployment_status = 'not_deployed' WHERE deployment_status IS NULL"
     ))
     _conn.commit()
 logger.info("Column migrations applied")

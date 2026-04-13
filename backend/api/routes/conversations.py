@@ -226,6 +226,7 @@ async def start_tasking(
     """
     _ensure_jira_connected(current_user.id, db)
     conversation = _get_owned_conversation(conversation_id, current_user.id, db)
+    was_deployed_before_tasking = conversation.deployment_status == "deployed"
 
     if conversation.status in ("tasking", "done"):
         raise HTTPException(status_code=400, detail="Conversation is not in a taskable state.")
@@ -428,6 +429,10 @@ async def start_tasking(
             jira_results=jira_tickets_created,
             db=db,
         )
+
+        if was_deployed_before_tasking:
+            conversation.deployment_status = "deploying"
+            conversation.deployment_error = None
 
         # ── 5. Mark idea as processing ──────────────────────────────
         idea = db.query(Idea).filter(Idea.id == conversation.idea_id).first()
