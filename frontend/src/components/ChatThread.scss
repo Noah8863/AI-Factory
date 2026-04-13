@@ -15,7 +15,8 @@
   border-radius: $radius-lg;
 
   @media (max-width: 640px) {
-    height: auto;
+    height: 100%;
+    min-height: 0;
     border-radius: 0;
   }
 }
@@ -139,7 +140,9 @@
 
 .chat-thread__messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: 24px 20px;
   display: flex;
   flex-direction: column;

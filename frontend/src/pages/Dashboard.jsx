@@ -156,6 +156,7 @@ export default function Dashboard() {
   const [deleteError, setDeleteError] = useState('')
   const [jiraStatus, setJiraStatus] = useState('loading')
   const [jiraProjectSelected, setJiraProjectSelected] = useState(true) // assume true until checked
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
 
   // ── Idea-level ticket tracking (for My Ideas page) ──────────
   const [ideaTicketsMap, setIdeaTicketsMap] = useState({})  // { [ideaId]: { tickets, stillPending } }
@@ -180,6 +181,48 @@ export default function Dashboard() {
       setActiveNav('new')
     }
   }, [activeNav, conversation])
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return
+
+    const viewport = window.visualViewport
+    const updateKeyboardState = () => {
+      const keyboardInset = Math.max(0, window.innerHeight - viewport.height)
+      setIsKeyboardOpen(keyboardInset > 120)
+    }
+
+    updateKeyboardState()
+    viewport.addEventListener('resize', updateKeyboardState)
+    viewport.addEventListener('scroll', updateKeyboardState)
+
+    return () => {
+      viewport.removeEventListener('resize', updateKeyboardState)
+      viewport.removeEventListener('scroll', updateKeyboardState)
+      setIsKeyboardOpen(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const isMobile = window.matchMedia('(max-width: 640px)').matches
+    const shouldLockViewport = activeNav === 'chat' && isMobile
+    if (!shouldLockViewport) return
+
+    const prevBodyOverflow = document.body.style.overflow
+    const prevHtmlOverflow = document.documentElement.style.overflow
+    const prevBodyOverscroll = document.body.style.overscrollBehavior
+
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.overscrollBehavior = 'none'
+
+    return () => {
+      document.body.style.overflow = prevBodyOverflow
+      document.documentElement.style.overflow = prevHtmlOverflow
+      document.body.style.overscrollBehavior = prevBodyOverscroll
+    }
+  }, [activeNav])
 
   // ── Auth guard ───────────────────────────────────────────────
   useEffect(() => { if (!user) navigate('/login') }, [])
@@ -587,9 +630,10 @@ export default function Dashboard() {
 
   const charCount = text.length
   const charColor = charCount > MAX_CHARS * 0.9 ? 'rose' : charCount > MAX_CHARS * 0.7 ? 'amber' : 'default'
+  const dashboardClassName = `dashboard${activeNav === 'chat' ? ' dashboard--chat' : ''}${isKeyboardOpen ? ' dashboard--keyboard-open' : ''}`
 
   return (
-    <div className="dashboard">
+    <div className={dashboardClassName}>
 
       {/* ── Animated background ───────────────────────────────── */}
       <div className="dashboard__bg">
