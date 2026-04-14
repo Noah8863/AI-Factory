@@ -1179,6 +1179,24 @@ async def run_all_tickets(
         # netlify.toml is already in the repo; Netlify reads it on first build.
         live_url: str | None = None
         if should_deploy_to_netlify:
+            # Safety: legacy repos may already exist as private from older runs.
+            # Ensure public visibility before Netlify attempts to clone.
+            try:
+                from services.github_service import ensure_repo_public
+
+                if not ensure_repo_public(repo):
+                    logger.warning(
+                        "Could not verify public visibility for %s before Netlify create; "
+                        "build prep may fail if repo remains private.",
+                        repo,
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Repo visibility check failed for %s before Netlify create: %s",
+                    repo,
+                    exc,
+                )
+
             try:
                 from services.netlify_service import create_netlify_site
                 netlify_result = create_netlify_site(

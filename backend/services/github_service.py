@@ -69,27 +69,71 @@ def commit_and_push(repo_name: str, branch_name: str, commit_message: str):
         print(f"❌ Push failed: {e}")
         return False
     
+def ensure_repo_public(repo_name: str) -> bool:
+    """
+    Ensure a repository in the configured GitHub org is public.
+
+    Returns True if the repo is public (or was made public), False otherwise.
+    """
+    token = os.getenv("GITHUB_TOKEN")
+    org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
+    if not token:
+        print("❌ GITHUB_TOKEN is missing; cannot update repository visibility.")
+        return False
+
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    repo_api_url = f"https://api.github.com/repos/{org_name}/{repo_name}"
+
+    meta_resp = requests.get(repo_api_url, headers=headers)
+    if meta_resp.status_code != 200:
+        print(
+            f"⚠️ Could not read repository visibility for {org_name}/{repo_name}: "
+            f"{meta_resp.status_code} {meta_resp.text[:200]}"
+        )
+        return False
+
+    is_private = bool(meta_resp.json().get("private", False))
+    if not is_private:
+        return True
+
+    vis_resp = requests.patch(repo_api_url, json={"private": False}, headers=headers)
+    if vis_resp.status_code == 200:
+        print(f"🌍 Updated repository visibility to public: https://github.com/{org_name}/{repo_name}")
+        return True
+
+    print(
+        f"⚠️ Failed to update repository visibility to public for {org_name}/{repo_name}: "
+        f"{vis_resp.status_code} {vis_resp.text[:200]}"
+    )
+    return False
+
+
 def create_org_repo(repo_name: str) -> dict | None:
     """
-    Creates a private repo in the AI-Factory-Labs GitHub org.
+    Creates a public repo in the configured GitHub org.
 
     Returns a dict on success:
       { "url": str, "created": bool }   (created=False means it already existed)
     Returns None on failure.
     """
     token = os.getenv("GITHUB_TOKEN")
-    org_name = "AI-Factory-Repos"
+    org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
+
+    if not token:
+        print("❌ GITHUB_TOKEN is missing; cannot create repository.")
+        return None
 
     url = f"https://api.github.com/orgs/{org_name}/repos"
-
     headers = {
         "Authorization": f"token {token}",
         "Accept": "application/vnd.github.v3+json",
     }
-
     data = {
         "name": repo_name,
-        "private": True,   # keep user projects private by default
+        "private": False,  # Netlify must clone repo without private Git credentials
         "auto_init": True, # creates a README so the repo isn't empty
     }
 
@@ -97,16 +141,18 @@ def create_org_repo(repo_name: str) -> dict | None:
 
     if response.status_code == 201:
         repo_url = response.json().get("html_url", f"https://github.com/{org_name}/{repo_name}")
+        ensure_repo_public(repo_name)
         print(f"✨ Created new repository: {repo_url}")
         return {"url": repo_url, "created": True}
-    elif response.status_code == 422:
-        # Repo already exists — surface the URL anyway
+    if response.status_code == 422:
+        # Repo already exists — surface the URL anyway and enforce public visibility.
         repo_url = f"https://github.com/{org_name}/{repo_name}"
+        ensure_repo_public(repo_name)
         print(f"ℹ️ Repository already exists: {repo_url}")
         return {"url": repo_url, "created": False}
-    else:
-        print(f"❌ Failed to create repo (status {response.status_code}): {response.text}")
-        return None
+
+    print(f"❌ Failed to create repo (status {response.status_code}): {response.text}")
+    return None
     
 def write_file_to_repo(
     repo_name: str,
