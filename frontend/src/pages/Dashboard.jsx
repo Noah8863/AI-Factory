@@ -124,6 +124,12 @@ function truncate(str, n = 160) {
   return str.length > n ? str.slice(0, n) + '…' : str
 }
 
+function getIdeaSummaryText(idea) {
+  const rawContent = (idea?.content || '').trim()
+  const cleanedContent = rawContent.replace(PROJECT_TYPE_PREFIX_RE, '').trim()
+  return (idea?.title || '').trim() || cleanedContent || 'Project idea'
+}
+
 function getIdeaDisplayMeta(idea) {
   const rawContent = (idea?.content || '').trim()
   const typeMatch = rawContent.match(PROJECT_TYPE_PREFIX_RE)
@@ -146,7 +152,7 @@ function getIdeaDisplayMeta(idea) {
       }
     : null
 
-  const headlineSource = (idea?.title || '').trim() || cleanedContent
+  const headlineSource = getIdeaSummaryText(idea)
   return {
     headline: truncate(headlineSource || 'Project idea', 170),
     typePill,
@@ -743,6 +749,9 @@ export default function Dashboard() {
   const effectiveMobileOffset = (activeNav === 'chat' && !isKeyboardOpen && !isDecisionMode)
     ? mobileTabsHeight
     : 0
+  const deletePreviewText = deleteConfirm
+    ? truncate(getIdeaSummaryText(deleteConfirm), 110)
+    : ''
 
   const dashboardClassName = `dashboard${activeNav === 'chat' ? ' dashboard--chat' : ''}${isKeyboardOpen ? ' dashboard--keyboard-open' : ''}${isDecisionMode ? ' dashboard--decision-active' : ''}`
   const dashboardStyle = {
@@ -776,7 +785,7 @@ export default function Dashboard() {
             <p className="confirm-modal__body">
               This will permanently delete the idea and its entire chat history. This action cannot be undone.
               <br /><br />
-              <span className="confirm-modal__preview">"{truncate(deleteConfirm.content, 80)}"</span>
+              <span className="confirm-modal__preview">"{deletePreviewText}"</span>
             </p>
             {deleteError && (
               <p className="confirm-modal__error">{deleteError}</p>

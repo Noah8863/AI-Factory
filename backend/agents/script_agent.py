@@ -33,8 +33,11 @@ Respond with a SINGLE JSON object and nothing else - no preamble, no explanation
 ## Rules
 - `path` is always relative to the repository root
 - Write COMPLETE file contents - never use placeholders like `...` or `// rest of file`
+- Treat the ticket title as a short label only; the acceptance criteria are the source of truth
 - Include all imports, shebangs, executable flags comments, and config keys needed
 - Prefer small, composable script files over broad monoliths
+- If you create packaging/build files (.spec, workflow YAML, .ps1/.sh build scripts), all referenced script paths must match real repository files exactly
+- If the ticket requires a Windows executable (.exe), ensure build commands and artifact paths are consistent and upload the built executable artifact
 - Never add extra features beyond the ticket acceptance criteria
 - `action` must be `"create"` for new files or `"update"` for existing files
 - Keep output token-efficient and focused

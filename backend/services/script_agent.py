@@ -8,6 +8,7 @@ generated files directly to the main branch of the target GitHub repository.
 import asyncio
 import logging
 import os
+import re
 
 import anthropic
 
@@ -24,10 +25,98 @@ _TECH_STACK = os.getenv(
 )
 
 
+def _normalize_path(path: str) -> str:
+    return (path or "").replace("\\", "/").strip("/").lower()
+
+
+def _extract_python_refs(text: str) -> set[str]:
+    refs = set()
+    for match in re.findall(r"([A-Za-z0-9_./\\-]+\.py)\b", text or ""):
+        refs.add(_normalize_path(match))
+    return refs
+
+
+def _validate_script_output(
+    ticket_prompt: str,
+    result: dict,
+    existing_repo_files: list[str] | None,
+) -> list[str]:
+    issues: list[str] = []
+
+    files = result.get("files", []) or []
+    generated_paths = {
+        _normalize_path(str(f.get("path", "")))
+        for f in files
+        if f.get("path")
+    }
+    existing_paths = {
+        _normalize_path(path)
+        for path in (existing_repo_files or [])
+        if path
+    }
+    known_paths = generated_paths | existing_paths
+    known_basenames = {os.path.basename(path) for path in known_paths if path}
+
+    references: list[tuple[str, str]] = []
+    has_exe_packaging_files = False
+    has_exe_artifact_upload = False
+    for file_obj in files:
+        path = str(file_obj.get("path", ""))
+        path_norm = _normalize_path(path)
+        content = str(file_obj.get("content", ""))
+        content_lower = content.lower()
+
+        if (
+            path_norm.endswith(".spec")
+            or path_norm.endswith(".ps1")
+            or path_norm.endswith(".sh")
+            or path_norm.endswith(".bat")
+            or path_norm.endswith(".yml")
+            or path_norm.endswith(".yaml")
+        ):
+            for ref in _extract_python_refs(content):
+                references.append((path, ref))
+
+        if (
+            path_norm.endswith(".spec")
+            or path_norm.startswith(".github/workflows/")
+            or "pyinstaller" in content_lower
+        ):
+            has_exe_packaging_files = True
+
+        if path_norm.startswith(".github/workflows/"):
+            if "upload-artifact" in content_lower and (".exe" in content_lower or "dist/" in content_lower):
+                has_exe_artifact_upload = True
+
+    for source_path, referenced_path in references:
+        ref_base = os.path.basename(referenced_path)
+        if referenced_path not in known_paths and ref_base not in known_basenames:
+            issues.append(
+                f"{source_path or 'generated file'} references missing script '{referenced_path}'"
+            )
+
+    ticket_text = (ticket_prompt or "").lower()
+    wants_windows_exe = bool(
+        re.search(r"\.exe|windows\s+executable|standalone\s+windows\s+exe|pyinstaller", ticket_text)
+    )
+
+    if wants_windows_exe and not has_exe_packaging_files:
+        issues.append(
+            "Ticket requests an executable build, but output has no spec/workflow/pyinstaller build steps"
+        )
+    if wants_windows_exe and not has_exe_artifact_upload:
+        issues.append(
+            "Ticket requests an executable build, but workflow artifact upload for built .exe is missing"
+        )
+
+    return issues
+
+
 async def run_script_task(
     ticket,
     ticket_prompt: str,
     repo_name: str,
+    existing_repo_files: list[str] | None = None,
 ) -> dict:
     """
     Call the Script Developer agent with a ticket, parse its JSON output,
@@ -121,6 +210,55 @@ async def run_script_task(
             "Script ticket %s hit max_tokens but returned parseable files; proceeding.",
             ticket.ticket_id,
         )
+
+    quality_issues = _validate_script_output(ticket_prompt, result, existing_repo_files)
+    if quality_issues:
+        logger.warning(
+            "Script agent output for ticket %s failed validation: %s. Retrying in quality recovery mode.",
+            ticket.ticket_id,
+            quality_issues,
+        )
+        quality_recovery_prompt = (
+            f"{ticket_prompt}\n\n"
+            "QUALITY RECOVERY MODE: Your previous response had build/reference inconsistencies "
+            f"({'; '.join(quality_issues[:6])}). Regenerate and ensure all filenames in spec/workflow/build "
+            "scripts match actual repo files exactly. If building a Windows exe, include a consistent "
+            "PyInstaller-compatible path and artifact upload. Return one valid JSON object exactly matching "
+            "the required schema."
+        )
+
+        try:
+            recovery_response = await _call_script_model(quality_recovery_prompt)
+            raw = recovery_response.content[0].text
+            stop_reason = recovery_response.stop_reason
+            result = parse_developer_output(raw)
+            logger.info(
+                "Script quality recovery response for ticket %s: %d chars, stop_reason=%s",
+                ticket.ticket_id,
+                len(raw),
+                stop_reason,
+            )
+        except anthropic.APIConnectionError as exc:
+            raise RuntimeError(
+                f"Anthropic API connection failed during quality recovery for ticket {ticket.ticket_id}: {exc}"
+            ) from exc
+        except anthropic.RateLimitError as exc:
+            raise RuntimeError(
+                f"Anthropic rate limit hit during quality recovery for ticket {ticket.ticket_id}. "
+                f"Retry after a short wait. Details: {exc}"
+            ) from exc
+        except anthropic.APIStatusError as exc:
+            raise RuntimeError(
+                f"Anthropic API error during quality recovery ({exc.status_code}) for ticket {ticket.ticket_id}: "
+                f"{exc.message}"
+            ) from exc
+
+        quality_issues = _validate_script_output(ticket_prompt, result, existing_repo_files)
+        if quality_issues:
+            raise RuntimeError(
+                "Script agent output still failed validation after quality recovery for "
+                f"ticket {ticket.ticket_id}: {quality_issues}"
+            )
 
     if not result.get("files"):
         logger.warning(

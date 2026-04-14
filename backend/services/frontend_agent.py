@@ -8,6 +8,7 @@ the generated files directly to the main branch of the target GitHub repository.
 import asyncio
 import logging
 import os
+import re
 
 import anthropic
 
@@ -23,6 +24,31 @@ _TECH_STACK = os.getenv(
     "FRONTEND_TECH_STACK",
     "Vanilla JavaScript (ES6+), HTML5, CSS3, Fetch API for HTTP requests",
 )
+
+
+def _find_placeholder_signals(ticket_prompt: str, result: dict) -> list[str]:
+    """Detect placeholder/demo artifacts that are not requested by the ticket."""
+    ticket_text = (ticket_prompt or "").lower()
+    if "hello world" in ticket_text or "helloworld" in ticket_text:
+        return []
+
+    patterns: list[tuple[re.Pattern[str], str]] = [
+        (re.compile(r"\bhello\s*world\b", re.IGNORECASE), "hello world literal"),
+        (re.compile(r"\bhelloworld\b", re.IGNORECASE), "HelloWorld identifier"),
+        (re.compile(r"/hello[-_]?world", re.IGNORECASE), "HelloWorld file path"),
+    ]
+
+    findings: list[str] = []
+    for index, file_obj in enumerate(result.get("files", []) or []):
+        path = str(file_obj.get("path", ""))
+        content = str(file_obj.get("content", ""))
+
+        for pattern, label in patterns:
+            if pattern.search(path) or pattern.search(content):
+                findings.append(f"{label} in {path or f'file[{index}]'}")
+                break
+
+    return findings
 
 
 async def run_frontend_task(
@@ -137,6 +163,56 @@ async def run_frontend_task(
             "Frontend ticket %s hit max_tokens but returned parseable files; proceeding.",
             ticket.ticket_id,
         )
+
+    placeholder_findings = _find_placeholder_signals(ticket_prompt, result)
+    if placeholder_findings:
+        logger.warning(
+            "Frontend agent output for ticket %s contained placeholder artifacts: %s. Retrying in quality recovery mode.",
+            ticket.ticket_id,
+            placeholder_findings,
+        )
+        quality_recovery_prompt = (
+            f"{ticket_prompt}\n\n"
+            "QUALITY RECOVERY MODE: Your previous response introduced placeholder/demo artifacts "
+            f"that are not in the ticket requirements ({'; '.join(placeholder_findings[:5])}). "
+            "Regenerate and remove all placeholder/demo code. Use meaningful domain-specific "
+            "component/module names derived from the acceptance criteria. Do not create "
+            "HelloWorld or demo-only files. Return one valid JSON object exactly matching "
+            "the required schema."
+        )
+
+        try:
+            recovery_response = await _call_frontend_model(quality_recovery_prompt)
+            raw = recovery_response.content[0].text
+            stop_reason = recovery_response.stop_reason
+            result = parse_developer_output(raw)
+            logger.info(
+                "Frontend quality recovery response for ticket %s: %d chars, stop_reason=%s",
+                ticket.ticket_id,
+                len(raw),
+                stop_reason,
+            )
+        except anthropic.APIConnectionError as exc:
+            raise RuntimeError(
+                f"Anthropic API connection failed during quality recovery for ticket {ticket.ticket_id}: {exc}"
+            ) from exc
+        except anthropic.RateLimitError as exc:
+            raise RuntimeError(
+                f"Anthropic rate limit hit during quality recovery for ticket {ticket.ticket_id}. "
+                f"Retry after a short wait. Details: {exc}"
+            ) from exc
+        except anthropic.APIStatusError as exc:
+            raise RuntimeError(
+                f"Anthropic API error during quality recovery ({exc.status_code}) for ticket {ticket.ticket_id}: "
+                f"{exc.message}"
+            ) from exc
+
+        placeholder_findings = _find_placeholder_signals(ticket_prompt, result)
+        if placeholder_findings:
+            raise RuntimeError(
+                "Frontend agent output still contains placeholder/demo artifacts "
+                f"for ticket {ticket.ticket_id} after quality recovery: {placeholder_findings}"
+            )
 
     if not result.get("files"):
         logger.warning(

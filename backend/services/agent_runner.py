@@ -590,6 +590,40 @@ async def run_ticket(
             effective_ticket_type,
         )
 
+    # Include repository file-tree context so agents can update existing files
+    # with exact paths instead of inventing new placeholders.
+    existing_repo_files: list[str] = []
+    if repo_name:
+        try:
+            from services.github_service import list_repo_files
+
+            existing_repo_files = await asyncio.to_thread(
+                list_repo_files,
+                repo_name,
+                "main",
+                300,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not load repository file tree for %s before ticket %s: %s",
+                repo_name,
+                ticket.ticket_id,
+                exc,
+            )
+
+    if existing_repo_files:
+        repo_file_lines = "\n".join(f"- {path}" for path in existing_repo_files)
+        repo_files_block = (
+            "## Existing Repository Files (main branch)\n\n"
+            "Use these exact paths when updating files.\n\n"
+            f"{repo_file_lines}\n\n"
+        )
+    else:
+        repo_files_block = (
+            "## Existing Repository Files (main branch)\n\n"
+            "Repository currently appears empty or file listing was unavailable.\n\n"
+        )
+
     # Build a rich prompt from ticket metadata
     deps_str = ", ".join(ticket.depends_on) if ticket.depends_on else "none"
     ticket_prompt = (
@@ -598,6 +632,11 @@ async def run_ticket(
         f"**Priority:** {ticket.priority or 'N/A'} | "
         f"**Sequence:** {ticket.sequence or 'N/A'} | "
         f"**Depends on:** {deps_str}\n\n"
+        "## Implementation Guardrails\n\n"
+        "- The ticket title is only a short label.\n"
+        "- Acceptance Criteria below is the source of truth and must drive implementation details.\n"
+        "- Do not generate placeholder/demo artifacts (for example HelloWorld, demo-only components, or toy scaffolds) unless explicitly required by the criteria.\n\n"
+        f"{repo_files_block}"
         f"## Acceptance Criteria\n\n{ticket.description}\n\n"
         f"## Target Repository\n`{repo_name}`\n"
     )
@@ -632,6 +671,7 @@ async def run_ticket(
                 ticket=ticket,
                 ticket_prompt=ticket_prompt,
                 repo_name=repo_name,
+                existing_repo_files=existing_repo_files,
             )
         else:
             raise RuntimeError(
@@ -1015,6 +1055,15 @@ async def run_all_tickets(
                 history,
                 project_name=project_name,
                 live_url=live_url,
+                project_tags={
+                    "has_frontend": has_frontend,
+                    "has_backend": has_backend,
+                    "is_script": is_script,
+                    "is_mobile_app": is_mobile_app,
+                    "is_devops_program": is_devops_program,
+                    "is_full_stack": is_full_stack,
+                    "has_mixed_technologies": has_mixed_technologies,
+                },
             )
 
             ok = write_file_to_repo(

@@ -155,6 +155,41 @@ def write_file_to_repo(
     return False
 
 
+def list_repo_files(repo_name: str, branch: str = "main", max_files: int = 500) -> list[str]:
+    """
+    Return a sorted list of file paths currently in the remote repository.
+
+    Uses the Git Trees API with recursive=true to provide lightweight tree
+    context for agent prompts.
+    """
+    token = os.getenv("GITHUB_TOKEN")
+    org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+
+    url = f"https://api.github.com/repos/{org_name}/{repo_name}/git/trees/{branch}"
+    resp = requests.get(url, headers=headers, params={"recursive": 1})
+    if resp.status_code != 200:
+        print(
+            f"⚠️ Failed to list repo files for {repo_name}: "
+            f"{resp.status_code} {resp.text[:200]}"
+        )
+        return []
+
+    tree = resp.json().get("tree", [])
+    files = sorted(
+        item.get("path", "")
+        for item in tree
+        if item.get("type") == "blob" and item.get("path")
+    )
+
+    if max_files and max_files > 0:
+        return files[:max_files]
+    return files
+
+
 def deploy_agent_work(repo_name: str, branch_name: str, commit_message: str):
     # 1. Ensure the repo exists in the Org
     if not create_org_repo(repo_name):

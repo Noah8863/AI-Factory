@@ -538,6 +538,14 @@ Include these sections (skip any that don't apply):
 8. **API Endpoints** — table of key endpoints if it's a web app (method, path, description)
 9. **License** — default to MIT
 
+Script/CLI-specific requirements:
+- If the project tags indicate `is_script: true`, include a dedicated **Run the Script** section.
+- In that section provide exact commands for:
+    - Windows PowerShell
+    - macOS/Linux shell
+- Include at least one real usage example (with arguments if relevant) and expected output behavior.
+- If executable packaging is part of scope, add a **Build Executable** section describing how to produce and where to find the `.exe` artifact.
+
 Keep it concise and practical. Output ONLY the raw Markdown — no code fences
 wrapping the entire document, no preamble, no explanation.
 """
@@ -622,6 +630,7 @@ def generate_readme(
     history: list[dict],
     project_name: str = "Project",
     live_url: str | None = None,
+    project_tags: dict | None = None,
 ) -> str:
     """
     Generate a README.md from the PM conversation history.
@@ -633,17 +642,26 @@ def generate_readme(
 
     Returns the raw Markdown string ready to be committed to the repo.
     """
+    tags = project_tags if isinstance(project_tags, dict) else {}
+    tags_json = json.dumps(tags, sort_keys=True)
+
     live_url_line = (
         f"The project is deployed and live at: {live_url}\n"
         "Include this URL in the Live Demo section.\n\n"
         if live_url
         else ""
     )
+    deployment_context_line = (
+        "The project has already been built and deployed. "
+        if live_url
+        else "The project has already been built and is ready to run locally. "
+    )
     readme_prompt = (
         f"The project is called \"{project_name}\".\n\n"
+        f"Project tags (JSON): {tags_json}\n\n"
         f"{live_url_line}"
         "Based on the conversation history above, write a README.md for this project.\n"
-        "The project has already been built and deployed. Write the README as if it "
+        f"{deployment_context_line}Write the README as if it "
         "is being added to the repository root."
     )
     messages = history + [{"role": "user", "content": readme_prompt}]

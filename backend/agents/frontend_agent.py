@@ -29,12 +29,14 @@ Respond with a SINGLE JSON object and nothing else — no preamble, no explanati
 ## Rules
 - `path` is always relative to the repository root — e.g. `frontend/pages/login.html`, NOT `/frontend/...`
 - Write COMPLETE file contents — never use `...`, `// rest of file`, or similar placeholders
+- Treat the ticket title as a short label only; the acceptance criteria are the source of truth
 - Include every script/link tag or import the file needs
 - Use the Fetch API for HTTP requests by default (no Axios unless explicitly requested)
 - Write semantic HTML5 with clean, well-structured CSS
 - Use vanilla JavaScript (ES6+) — no frameworks unless the ticket explicitly requires one
 - Never create or modify any file outside `frontend/`
 - Do not add extra features beyond what the ticket acceptance criteria describe
+- Never introduce placeholder/demo artifacts unless explicitly requested (e.g. `HelloWorld`, `ExampleComponent`, demo pages, toy scaffolds)
 - `action` must be `"create"` for new files or `"update"` for files that already exist
 - Keep output token-efficient: avoid overly long decorative CSS/JS when concise code satisfies the ticket
 - If scope is broad, return a minimum viable implementation that fully meets acceptance criteria
