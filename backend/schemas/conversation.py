@@ -69,6 +69,8 @@ class ConversationRead(BaseModel):
     id: int
     idea_id: int
     status: str
+    asked_user_change_product_type: bool = False
+    pending_project_type: str | None = None
     project_tags:     dict[str, bool] | None = None
     github_repo_name: str | None = None
     github_repo_url:  str | None = None

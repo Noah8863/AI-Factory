@@ -16,6 +16,9 @@ class Conversation(Base):
     # Project type tags set by the PM agent at ticket-generation time.
     # Stored as an object keyed by the canonical tag names.
     project_tags = Column(JSON, default=dict, nullable=True)
+    # Product-type switch negotiation state.
+    asked_user_change_product_type = Column(Boolean, default=False, nullable=False)
+    pending_project_type = Column(String(64), nullable=True)
     # GitHub repo created when the user first clicks "Start Building"
     github_repo_name = Column(String(255), nullable=True)
     github_repo_url  = Column(String(512), nullable=True)

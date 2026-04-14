@@ -466,7 +466,7 @@ def summarize_idea(idea_text: str) -> str:
 def get_pm_response(
     history: list[dict],
     user_message_count: int,
-) -> tuple[str, bool, dict | None]:
+) -> tuple[str, bool, dict | None, dict]:
     """
     Called every time the user sends a follow-up message.
 
@@ -477,7 +477,11 @@ def get_pm_response(
     """
     raw = _call_llm(history)
     result = parse_agent_reply(raw)
-    return result["displayText"], result["isReady"], result["tickets"]
+    switch_meta = {
+        "asked_user_change_product_type": bool(result.get("askedUserChangeProductType", False)),
+        "requested_project_type": result.get("requestedProjectType"),
+    }
+    return result["displayText"], result["isReady"], result["tickets"], switch_meta
 
 
 async def run_tasking(

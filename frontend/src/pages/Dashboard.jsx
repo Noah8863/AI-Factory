@@ -587,6 +587,7 @@ export default function Dashboard() {
       setConversation(normalizedConv)
       setMessages(msgs)
       if (normalizedConv.status === 'ready_to_task') setShowReadyBanner(true)
+      fetchIdeas()
     } catch {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id))
       setSendError('Failed to send. Please try again.')

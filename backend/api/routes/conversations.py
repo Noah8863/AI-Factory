@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -57,6 +58,84 @@ PROJECT_TAG_KEYS: tuple[str, ...] = (
     "is_full_stack",
     "has_mixed_technologies",
 )
+
+PROJECT_TYPE_PREFIX_RE = re.compile(r"^\s*\[PROJECT_TYPE:\s*([^\]]+)\]\s*", re.IGNORECASE)
+
+PROJECT_TYPE_ALIASES: dict[str, str] = {
+    "web app": "Web App",
+    "webapp": "Web App",
+    "frontend": "Web App",
+    "frontend app": "Web App",
+    "backend api": "Backend API",
+    "backend": "Backend API",
+    "api": "Backend API",
+    "script / cli": "Script / CLI",
+    "script/cli": "Script / CLI",
+    "script cli": "Script / CLI",
+    "script": "Script / CLI",
+    "cli": "Script / CLI",
+    "mobile app": "Mobile App",
+    "mobile": "Mobile App",
+    "devops tool": "DevOps Tool",
+    "devops": "DevOps Tool",
+}
+
+
+def _normalize_project_type_label(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    key = re.sub(r"\s+", " ", raw.strip().lower())
+    return PROJECT_TYPE_ALIASES.get(key)
+
+
+def _project_tags_for_type_label(type_label: str | None) -> dict[str, bool] | None:
+    normalized = _normalize_project_type_label(type_label)
+    if not normalized:
+        return None
+
+    tags = {key: False for key in PROJECT_TAG_KEYS}
+    if normalized == "Web App":
+        tags["has_frontend"] = True
+        tags["has_backend"] = True
+    elif normalized == "Backend API":
+        tags["has_backend"] = True
+    elif normalized == "Script / CLI":
+        tags["is_script"] = True
+    elif normalized == "Mobile App":
+        tags["is_mobile_app"] = True
+    elif normalized == "DevOps Tool":
+        tags["is_devops_program"] = True
+
+    tags["is_full_stack"] = tags["has_frontend"] and tags["has_backend"]
+    return tags
+
+
+def _extract_prefixed_project_type(content: str) -> str | None:
+    match = PROJECT_TYPE_PREFIX_RE.match(content or "")
+    if not match:
+        return None
+    return _normalize_project_type_label(match.group(1))
+
+
+def _upsert_project_type_prefix(content: str, type_label: str) -> str:
+    canonical = _normalize_project_type_label(type_label) or type_label
+    body = PROJECT_TYPE_PREFIX_RE.sub("", content or "", count=1).lstrip()
+    prefix = f"[PROJECT_TYPE: {canonical}]"
+    if body:
+        return f"{prefix}\n\n{body}"
+    return prefix
+
+
+def _classify_type_switch_reply(content: str) -> str:
+    text = (content or "").strip().lower()
+    if not text:
+        return "unknown"
+
+    if re.search(r"\b(no|nope|nah|don't|do not|keep|stay|leave it|not now)\b", text):
+        return "no"
+    if re.search(r"\b(yes|yeah|yep|sure|ok|okay|please do|go ahead|switch|change it|sounds good)\b", text):
+        return "yes"
+    return "unknown"
 
 
 def _get_owned_conversation(
@@ -129,7 +208,13 @@ def create_conversation(
     db.flush()
 
     # 2. Open a conversation
-    conversation = Conversation(idea_id=idea.id, user_id=current_user.id)
+    initial_type = _extract_prefixed_project_type(payload.content)
+    initial_tags = _project_tags_for_type_label(initial_type)
+    conversation = Conversation(
+        idea_id=idea.id,
+        user_id=current_user.id,
+        project_tags=initial_tags,
+    )
     db.add(conversation)
     db.flush()
 
@@ -188,6 +273,38 @@ def send_message(
     ))
     db.flush()
 
+    # If PM previously asked to switch project type, interpret the user's reply.
+    if conversation.pending_project_type:
+        switch_reply = _classify_type_switch_reply(payload.content)
+
+        if switch_reply == "yes":
+            approved_type = _normalize_project_type_label(conversation.pending_project_type)
+            approved_tags = _project_tags_for_type_label(approved_type)
+            if approved_type and approved_tags:
+                conversation.project_tags = approved_tags
+                conversation.asked_user_change_product_type = True
+
+                idea_row = db.query(Idea).filter(Idea.id == conversation.idea_id).first()
+                if idea_row:
+                    idea_row.content = _upsert_project_type_prefix(idea_row.content or "", approved_type)
+
+                logger.info(
+                    "Conversation %s project type switched to %s based on user confirmation.",
+                    conversation_id,
+                    approved_type,
+                )
+
+            conversation.pending_project_type = None
+
+        elif switch_reply == "no":
+            conversation.asked_user_change_product_type = True
+            conversation.pending_project_type = None
+
+            logger.info(
+                "Conversation %s user declined project type switch.",
+                conversation_id,
+            )
+
     # Fetch the full history (including the message just flushed)
     all_messages = (
         db.query(Message)
@@ -200,7 +317,18 @@ def send_message(
     llm_history = _build_llm_history(all_messages)
 
     # Call PM agent service with full history
-    response_text, is_ready, _tickets = pm_agent.get_pm_response(llm_history, user_count)
+    response_text, is_ready, _tickets, switch_meta = pm_agent.get_pm_response(llm_history, user_count)
+
+    requested_project_type = switch_meta.get("requested_project_type")
+    if switch_meta.get("asked_user_change_product_type") and requested_project_type:
+        conversation.asked_user_change_product_type = True
+        conversation.pending_project_type = requested_project_type
+
+        logger.info(
+            "Conversation %s PM requested project type switch to %s.",
+            conversation_id,
+            requested_project_type,
+        )
 
     db.add(Message(
         conversation_id=conversation_id,
@@ -293,40 +421,31 @@ async def start_tasking(
 
     tickets_data = result.get("tickets") or {}
 
-    # ── 0. Merge project type tags from PM output ────────────────
-    # On Add Requirements rounds, scope can evolve (e.g. script -> full-stack).
-    # Merge capabilities across rounds while preserving canonical constraints.
+    # ── 0. Refresh project type tags from PM output ───────────────
+    # On Add Requirements rounds, scope can evolve (e.g. script -> web app).
+    # Prefer the latest PM tags as authoritative when available.
     incoming_tags = normalize_project_tags(result.get("projectTags"), require_any_true=True)
     if incoming_tags is None:
         incoming_tags = normalize_project_tags(
             tickets_data.get("projectTags") if isinstance(tickets_data, dict) else None,
             require_any_true=True,
         )
-
-    existing_tags = normalize_project_tags(conversation.project_tags, require_any_true=False) or {
-        key: False for key in PROJECT_TAG_KEYS
-    }
-
     if incoming_tags is not None:
-        merged_tags = {
-            key: bool(existing_tags.get(key, False) or incoming_tags.get(key, False))
-            for key in PROJECT_TAG_KEYS
-        }
+        refreshed_tags = {key: bool(incoming_tags.get(key, False)) for key in PROJECT_TAG_KEYS}
 
-        # A project cannot remain "script-only" once FE/BE capabilities exist.
-        if merged_tags.get("has_frontend") or merged_tags.get("has_backend"):
-            merged_tags["is_script"] = False
-
-        merged_tags["is_full_stack"] = (
-            merged_tags.get("has_frontend", False)
-            and merged_tags.get("has_backend", False)
+        # Canonical constraints.
+        if refreshed_tags.get("has_frontend") or refreshed_tags.get("has_backend"):
+            refreshed_tags["is_script"] = False
+        refreshed_tags["is_full_stack"] = (
+            refreshed_tags.get("has_frontend", False)
+            and refreshed_tags.get("has_backend", False)
         )
 
-        conversation.project_tags = merged_tags
+        conversation.project_tags = refreshed_tags
         logger.info(
             "Project tags for conversation %s updated to: %s",
             conversation_id,
-            merged_tags,
+            refreshed_tags,
         )
 
     # ── 1. Create GitHub repo (first tasking only) ───────────────

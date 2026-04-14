@@ -42,6 +42,20 @@ type, you MUST raise it explicitly:
    Do NOT raise the mismatch again.
 Never change the project type silently — always ask first.
 
+When you ask for a type switch, append this metadata token on its own line:
+`__PM_SWITCH_REQUEST__: <PROJECT_TYPE>`
+
+Allowed PROJECT_TYPE values:
+- Web App
+- Backend API
+- Script / CLI
+- Mobile App
+- DevOps Tool
+
+Example:
+"Should I switch the project type to Web App?"
+`__PM_SWITCH_REQUEST__: Web App`
+
 ## Phase 1 — Discovery (clarifying questions)
 When the user submits a project idea, **first identify its scope tier** before
 asking anything else. Use the message itself as a signal:
@@ -275,13 +289,60 @@ previous round left off (infer the last sequence used from the conversation hist
 
 
 # ─── RESPONSE PARSER ──────────────────────────────────────────────────────────
+_TYPE_SWITCH_ALIASES = {
+  "web app": "Web App",
+  "webapp": "Web App",
+  "frontend": "Web App",
+  "frontend app": "Web App",
+  "backend api": "Backend API",
+  "api": "Backend API",
+  "backend": "Backend API",
+  "script / cli": "Script / CLI",
+  "script/cli": "Script / CLI",
+  "script cli": "Script / CLI",
+  "script": "Script / CLI",
+  "cli": "Script / CLI",
+  "mobile app": "Mobile App",
+  "mobile": "Mobile App",
+  "devops tool": "DevOps Tool",
+  "devops": "DevOps Tool",
+}
+
+
+def _normalize_project_type_label(value: str | None) -> str | None:
+  if not value:
+    return None
+  normalized = re.sub(r"\s+", " ", value.strip().lower())
+  return _TYPE_SWITCH_ALIASES.get(normalized)
+
+
 def parse_agent_reply(raw: str) -> dict:
     """
     Strips __PM_READY__ token and checks for ticket JSON.
     Returns a dict your API route can serialize and send to the frontend.
     """
     is_ready = "__PM_READY__" in raw
-    display_text = raw.replace("__PM_READY__", "").strip()
+
+    requested_project_type: str | None = None
+    switch_token_match = re.search(r"__PM_SWITCH_REQUEST__\s*:\s*([^\n\r]+)", raw, re.IGNORECASE)
+    if switch_token_match:
+      requested_project_type = _normalize_project_type_label(switch_token_match.group(1))
+
+    display_text = raw.replace("__PM_READY__", "")
+    display_text = re.sub(r"__PM_SWITCH_REQUEST__\s*:\s*[^\n\r]+", "", display_text, flags=re.IGNORECASE)
+    display_text = display_text.strip()
+
+    # Fallback heuristic for legacy prompts that forget the metadata token.
+    if requested_project_type is None:
+      heuristic_match = re.search(
+        r"switch(?:\s+the)?\s+project\s+type\s+to\s+([^?.!\n]+)",
+        display_text,
+        re.IGNORECASE,
+      )
+      if heuristic_match:
+        requested_project_type = _normalize_project_type_label(heuristic_match.group(1))
+
+    asked_user_change_product_type = requested_project_type is not None
 
     tickets = None
 
@@ -349,4 +410,6 @@ def parse_agent_reply(raw: str) -> dict:
         "phase": phase,
         "tickets": tickets,
         "projectTags": project_tags,
+      "askedUserChangeProductType": asked_user_change_product_type,
+      "requestedProjectType": requested_project_type,
     }
