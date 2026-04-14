@@ -185,6 +185,7 @@ export default function Dashboard() {
   const [isTaskingLoading, setIsTaskingLoading] = useState(false)
   const [devInProcess, setDevInProcess] = useState(false)
   const [isDeployActionLoading, setIsDeployActionLoading] = useState(false)
+  const [isAwaitingAutoDeployStart, setIsAwaitingAutoDeployStart] = useState(false)
   const [agentRunError, setAgentRunError] = useState('')
   const [agentTickets, setAgentTickets] = useState([])       // TicketRead[]
 
@@ -211,9 +212,15 @@ export default function Dashboard() {
   // Keep polling single-flight to avoid piling up pending /tickets requests.
   const ticketsRequestInFlightRef = useRef(false)
   const activeConversationIdRef = useRef(null)
+  const deployStartBridgePollsRef = useRef(0)
 
   useEffect(() => {
     activeConversationIdRef.current = conversation?.id ?? null
+  }, [conversation?.id])
+
+  useEffect(() => {
+    deployStartBridgePollsRef.current = 0
+    setIsAwaitingAutoDeployStart(false)
   }, [conversation?.id])
 
   useEffect(() => {
@@ -340,17 +347,49 @@ export default function Dashboard() {
       if (activeConversationIdRef.current !== convId) return
 
       const { tickets, still_pending } = res.data
-      setAgentTickets(tickets ?? [])
-      setDevInProcess((still_pending ?? 0) > 0)
+      const ticketsList = tickets ?? []
+      const stillPendingCount = still_pending ?? 0
+      const deploymentStatusFromApi = res.data.deployment_status || 'not_deployed'
+
+      const hasFrontendWork = ticketsList.some((ticket) => ticket.type === 'frontend')
+      const allTicketsDone = ticketsList.length > 0 && ticketsList.every((ticket) => ticket.status === 'done')
+
+      // Bridge a short window between "all tickets done" and backend flipping
+      // deployment_status to "deploying" so the Deploying overlay is not missed.
+      const shouldBridgeDeployKickoff = (
+        devInProcess &&
+        stillPendingCount === 0 &&
+        hasFrontendWork &&
+        allTicketsDone &&
+        deploymentStatusFromApi === 'not_deployed' &&
+        deployStartBridgePollsRef.current < 25
+      )
+
+      if (shouldBridgeDeployKickoff) {
+        deployStartBridgePollsRef.current += 1
+        setIsAwaitingAutoDeployStart(true)
+      } else {
+        deployStartBridgePollsRef.current = 0
+        setIsAwaitingAutoDeployStart(false)
+      }
+
+      setAgentTickets(ticketsList)
+      setDevInProcess(stillPendingCount > 0)
+
+      const effectiveDeploymentStatus = shouldBridgeDeployKickoff
+        ? 'deploying'
+        : deploymentStatusFromApi
 
       if (activeConversationIdRef.current === convId) {
         setConversation((prev) => {
           if (!prev || prev.id !== convId) return prev
           return {
             ...prev,
-            deployment_status: res.data.deployment_status || prev.deployment_status || 'not_deployed',
+            deployment_status: effectiveDeploymentStatus || prev.deployment_status || 'not_deployed',
             deployment_live_url: res.data.deployment_live_url ?? prev.deployment_live_url ?? null,
-            deployment_error: res.data.deployment_error ?? prev.deployment_error ?? null,
+            deployment_error: shouldBridgeDeployKickoff
+              ? null
+              : (res.data.deployment_error ?? prev.deployment_error ?? null),
           }
         })
       }
@@ -360,18 +399,22 @@ export default function Dashboard() {
 
       // No tickets yet for this conversation — clear any stale state
       if (activeConversationIdRef.current === convId) {
+        deployStartBridgePollsRef.current = 0
+        setIsAwaitingAutoDeployStart(false)
         setAgentTickets([])
         setDevInProcess(false)
       }
     } finally {
       ticketsRequestInFlightRef.current = false
     }
-  }, [])
+  }, [devInProcess])
 
-  // ── Poll ticket status while agents are running ──────────────
+  // ── Poll ticket status while agents/deploy are running ───────
   useEffect(() => {
     const shouldPoll = !!conversation?.id && (
-      devInProcess || conversation?.deployment_status === 'deploying'
+      devInProcess ||
+      isAwaitingAutoDeployStart ||
+      conversation?.deployment_status === 'deploying'
     )
     if (!shouldPoll) return
 
@@ -387,7 +430,7 @@ export default function Dashboard() {
       cancelled = true
       clearInterval(interval)
     }
-  }, [devInProcess, conversation?.id, conversation?.deployment_status, fetchTickets])
+  }, [devInProcess, isAwaitingAutoDeployStart, conversation?.id, conversation?.deployment_status, fetchTickets])
 
 
   // ── Fetch tickets for all ideas (My Ideas page) ─────────────

@@ -138,10 +138,16 @@ export default function ChatThread({
   const toastTimerRef = useRef(null)
   const isTasking = status === 'tasking'
   const isDone    = status === 'done'
+  const isDeploying = deploymentStatus === 'deploying' || !!isDeployActionLoading
+  const deployOverlaySubtext = isDeployActionLoading
+    ? 'Starting deployment...'
+    : 'PM Agent is deploying your project. Chat is temporarily locked.'
   const isJiraBlocked = jiraStatus !== 'connected' || !jiraProjectSelected
   const projectTypeLabel = getProjectTypeLabel(projectTags)
   const composerHint = sessionExpired
     ? 'Session expired'
+    : isDeploying
+      ? 'Deployment in progress...'
     : isJiraBlocked
       ? (jiraStatus !== 'connected' ? 'Connect Jira in Profile' : 'Select a Jira project in Profile')
       : isSending
@@ -187,7 +193,7 @@ export default function ChatThread({
   let deployControlDisabledReason = ''
 
   if (hasFrontendCapability && repoUrl) {
-    if (deploymentStatus === 'deploying' || (hasSuccessfulDeployment && devInProcess)) {
+    if (isDeploying || (hasSuccessfulDeployment && devInProcess)) {
       deployControlMode = 'deploying'
     } else if (deploymentStatus === 'deployed' && !devInProcess) {
       deployControlMode = 'deployed'
@@ -271,7 +277,7 @@ export default function ChatThread({
 
   const handleSend = () => {
     const trimmed = input.trim()
-    if (!trimmed || isSending || isTasking || isDone || isJiraBlocked || sessionExpired) return
+    if (!trimmed || isSending || isTasking || isDone || isDeploying || isJiraBlocked || sessionExpired) return
     setInput('')
     onSendMessage(trimmed)
     inputRef.current?.focus()
@@ -419,6 +425,21 @@ export default function ChatThread({
         </div>
       )}
 
+      {/* ── Deployment loading overlay ─────────────────────────── */}
+      {isDeploying && !isTaskingLoading && (
+        <div className="tasking-overlay tasking-overlay--deploy" role="status" aria-live="polite">
+          <div className="tasking-overlay__orb" />
+          <div className="tasking-overlay__ring tasking-overlay__ring--1" />
+          <div className="tasking-overlay__ring tasking-overlay__ring--2" />
+          <div className="tasking-overlay__ring tasking-overlay__ring--3" />
+          <div className="tasking-overlay__icon">
+            <span className="material-icons">cloud_upload</span>
+          </div>
+          <p className="tasking-overlay__phrase">Deploying...</p>
+          <p className="tasking-overlay__sub">{deployOverlaySubtext}</p>
+        </div>
+      )}
+
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="chat-thread__header">
         <button className="chat-thread__back" onClick={onBack}>
@@ -432,7 +453,7 @@ export default function ChatThread({
           <div>
             <p className="chat-thread__agent-name">PM Agent</p>
             <p className="chat-thread__agent-status">
-              {isTasking ? 'Creating tasks…' : isSending ? 'Typing…' : 'Active'}
+              {isDeploying ? 'Deploying…' : isTasking ? 'Creating tasks…' : isSending ? 'Typing…' : 'Active'}
             </p>
           </div>
         </div>
@@ -566,7 +587,7 @@ export default function ChatThread({
             <button
               className="chat-ready-banner__btn chat-ready-banner__btn--ghost"
               onClick={onContinueChat}
-              disabled={isJiraBlocked}
+              disabled={isJiraBlocked || isDeploying}
             >
               <span className="material-icons">chat</span>
               Continue Chat
@@ -574,7 +595,7 @@ export default function ChatThread({
             <button
               className="chat-ready-banner__btn chat-ready-banner__btn--primary"
               onClick={onStartTasking}
-              disabled={isJiraBlocked}
+              disabled={isJiraBlocked || isDeploying}
             >
               Start Building
               <span className="material-icons">rocket_launch</span>
@@ -622,6 +643,7 @@ export default function ChatThread({
             <button
               className="chat-thread__add-more-btn"
               onClick={onAddMoreRequirements}
+              disabled={isDeploying}
             >
               <span className="material-icons">add_circle_outline</span>
               Add Requirements
@@ -629,6 +651,7 @@ export default function ChatThread({
             <button
               className="chat-thread__add-more-btn chat-thread__add-more-btn--ghost"
               onClick={onReportBug}
+              disabled={isDeploying}
             >
               <span className="material-icons">bug_report</span>
               Report Bug
@@ -653,6 +676,7 @@ export default function ChatThread({
                 className="chat-thread__input"
                 placeholder={
                   sessionExpired  ? 'Session expired — redirecting…' :
+                  isDeploying    ? 'Deployment in progress — composer is temporarily locked' :
                   isJiraBlocked   ? (jiraStatus !== 'connected' ? 'Connect Jira to continue chatting' : 'Select a Jira project to continue') :
                   'Reply to the PM agent…'
                 }
@@ -660,12 +684,12 @@ export default function ChatThread({
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 rows={1}
-                disabled={isSending || isJiraBlocked || sessionExpired}
+                disabled={isDeploying || isSending || isJiraBlocked || sessionExpired}
               />
               <button
                 className="chat-thread__send"
                 onClick={handleSend}
-                disabled={isJiraBlocked || sessionExpired || !input.trim() || isSending}
+                disabled={isDeploying || isJiraBlocked || sessionExpired || !input.trim() || isSending}
                 aria-label="Send message"
               >
                 <span className="material-icons">send</span>
@@ -681,6 +705,7 @@ export default function ChatThread({
           <button
             className="chat-thread__add-more-btn"
             onClick={onAddMoreRequirements}
+            disabled={isDeploying}
           >
             <span className="material-icons">add_circle_outline</span>
             Add Requirements
@@ -688,6 +713,7 @@ export default function ChatThread({
           <button
             className="chat-thread__add-more-btn chat-thread__add-more-btn--ghost"
             onClick={onReportBug}
+            disabled={isDeploying}
           >
             <span className="material-icons">bug_report</span>
             Report Bug

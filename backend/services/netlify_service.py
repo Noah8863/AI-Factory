@@ -13,7 +13,8 @@ Public API
 
   create_netlify_site(site_name, repo_full_name)
       Creates a Netlify site linked to the GitHub repo with build settings
-      (command: 'npm run build', publish directory: 'dist').
+      (command: 'npm --prefix frontend install && npm --prefix frontend run build',
+       publish directory: 'frontend/dist').
       Does NOT write netlify.toml — that is the caller's responsibility.
       Returns {"site_url": str, "site_id": str} on success or {"error": str} on failure.
 
@@ -46,6 +47,9 @@ _BACKEND_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(_BACKEND_ENV_PATH)
 
 logger = logging.getLogger(__name__)
+
+_FRONTEND_BUILD_COMMAND = "npm --prefix frontend install && npm --prefix frontend run build"
+_FRONTEND_PUBLISH_DIR = "frontend/dist"
 
 
 def _auth_token() -> str:
@@ -102,6 +106,56 @@ def _headers() -> dict:
         "Authorization": f"Bearer {_auth_token()}",
         "Content-Type": "application/json",
     }
+
+
+def _desired_build_settings(repo_full_name: str) -> dict:
+    return {
+        "provider": "github",
+        "repo_url": f"https://github.com/{repo_full_name}",
+        "repo_path": repo_full_name,
+        "repo_branch": "main",
+        "allowed_branches": ["main"],
+        "public_repo": True,
+        "cmd": _FRONTEND_BUILD_COMMAND,
+        "dir": _FRONTEND_PUBLISH_DIR,
+    }
+
+
+def _ensure_site_build_settings(site_id: str, repo_full_name: str) -> bool:
+    """
+    Force site build settings to match this codebase structure.
+
+    Generated repos keep web code in /frontend, so Netlify must build from there.
+    """
+    if not site_id:
+        return False
+
+    url = f"{_api_base()}/sites/{site_id}"
+    payload = {"build_settings": _desired_build_settings(repo_full_name)}
+
+    try:
+        resp = requests.patch(url, json=payload, headers=_headers(), timeout=30)
+    except requests.RequestException as exc:
+        logger.warning("Failed to update Netlify build settings for site %s: %s", site_id, exc)
+        return False
+
+    if resp.status_code in (200, 201):
+        logger.info(
+            "Updated Netlify build settings for site %s (repo=%s, cmd=%s, dir=%s, public_repo=true).",
+            site_id,
+            repo_full_name,
+            _FRONTEND_BUILD_COMMAND,
+            _FRONTEND_PUBLISH_DIR,
+        )
+        return True
+
+    logger.warning(
+        "Failed to update Netlify build settings for site %s (HTTP %s): %s",
+        site_id,
+        resp.status_code,
+        resp.text[:300],
+    )
+    return False
 
 
 def _find_existing_site_for_repo(repo_full_name: str, site_name: str | None = None) -> dict | None:
@@ -176,7 +230,7 @@ def _find_existing_site_for_repo(repo_full_name: str, site_name: str | None = No
 
 # ── netlify.toml ──────────────────────────────────────────────────────────────
 
-def write_netlify_toml(repo_name: str, backend_url: str) -> bool:
+def write_netlify_toml(repo_name: str, backend_url: str | None = None) -> bool:
     """
     Commit a netlify.toml to the root of the generated GitHub repo.
 
@@ -197,20 +251,24 @@ def write_netlify_toml(repo_name: str, backend_url: str) -> bool:
     """
     from services.github_service import write_file_to_repo
 
-    clean_backend = backend_url.rstrip("/")
     toml = (
         "[build]\n"
-        '  command = "npm run build"\n'
-        '  publish = "dist"\n'
-        "\n"
-        "# Proxy /api/* to this project's Railway backend.\n"
-        "# Server-side rewrite (status=200) — browser never sees a cross-origin request.\n"
-        "[[redirects]]\n"
-        '  from   = "/api/*"\n'
-        f'  to     = "{clean_backend}/api/:splat"\n'
-        "  status = 200\n"
-        "  force  = true\n"
+        f'  command = "{_FRONTEND_BUILD_COMMAND}"\n'
+        f'  publish = "{_FRONTEND_PUBLISH_DIR}"\n'
     )
+
+    if backend_url:
+        clean_backend = backend_url.rstrip("/")
+        toml += (
+            "\n"
+            "# Proxy /api/* to this project's Railway backend.\n"
+            "# Server-side rewrite (status=200) — browser never sees a cross-origin request.\n"
+            "[[redirects]]\n"
+            '  from   = "/api/*"\n'
+            f'  to     = "{clean_backend}/api/:splat"\n'
+            "  status = 200\n"
+            "  force  = true\n"
+        )
 
     ok = write_file_to_repo(
         repo_name=repo_name,
@@ -237,8 +295,10 @@ def create_netlify_site(
     """
     Create a Netlify site linked to the GitHub repo, configured for CD.
 
-    Netlify triggers a new deploy on every push to the main branch.
-    Build settings: command='npm run build', publish directory='dist'.
+        Netlify triggers a new deploy on every push to the main branch.
+        Build settings:
+            command='npm --prefix frontend install && npm --prefix frontend run build'
+            publish directory='frontend/dist'.
 
     Does NOT write netlify.toml — that must already be committed to the repo
     before this function is called (see write_netlify_toml).
@@ -267,6 +327,7 @@ def create_netlify_site(
     # Fast path: if this repo is already linked, reuse the existing site.
     existing = _find_existing_site_for_repo(repo_full_name, site_name)
     if existing:
+        _ensure_site_build_settings(existing.get("site_id", ""), repo_full_name)
         return existing
 
     account_slug = _account_slug()
@@ -277,9 +338,11 @@ def create_netlify_site(
             "provider": "github",
             "repo":     repo_full_name,
             "branch":   "main",
-            "cmd":      "npm run build",
-            "dir":      "dist",
+            "cmd":      _FRONTEND_BUILD_COMMAND,
+            "dir":      _FRONTEND_PUBLISH_DIR,
+            "public_repo": True,
         },
+        "build_settings": _desired_build_settings(repo_full_name),
     }
 
     # Account-specific endpoint guarantees the site appears in the intended team.
@@ -302,7 +365,9 @@ def create_netlify_site(
         return {"error": message}
 
     if resp.status_code in (200, 201):
-        return _parse_site_response(resp.json(), repo_full_name)
+        parsed = _parse_site_response(resp.json(), repo_full_name)
+        _ensure_site_build_settings(parsed.get("site_id", ""), repo_full_name)
+        return parsed
 
     # 422 = subdomain already taken — retry without a name so Netlify auto-assigns
     if resp.status_code == 422:
@@ -319,11 +384,14 @@ def create_netlify_site(
             return {"error": message}
 
         if retry.status_code in (200, 201):
-            return _parse_site_response(retry.json(), repo_full_name)
+            parsed = _parse_site_response(retry.json(), repo_full_name)
+            _ensure_site_build_settings(parsed.get("site_id", ""), repo_full_name)
+            return parsed
 
         # Repo may already be linked to a site despite 422 on create.
         existing_after_retry = _find_existing_site_for_repo(repo_full_name, site_name)
         if existing_after_retry:
+            _ensure_site_build_settings(existing_after_retry.get("site_id", ""), repo_full_name)
             return existing_after_retry
 
         message = (
@@ -336,6 +404,7 @@ def create_netlify_site(
     # Last chance: check whether a linked site already exists for this repo.
     existing_after_failure = _find_existing_site_for_repo(repo_full_name, site_name)
     if existing_after_failure:
+        _ensure_site_build_settings(existing_after_failure.get("site_id", ""), repo_full_name)
         return existing_after_failure
 
     message = (

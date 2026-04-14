@@ -1147,32 +1147,38 @@ async def run_all_tickets(
                     "Unexpected error during Railway deployment for %s: %s", repo, exc,
                 )
 
-        # ── Step 2: Write netlify.toml to GitHub (full-stack only) ───────────
-        # Must happen BEFORE the Netlify site is created so the proxy config
-        # is in the repo when Netlify's first build runs.
-        if is_full_stack and has_frontend:
-            if backend_url:
-                try:
-                    from services.netlify_service import write_netlify_toml
-                    ok = write_netlify_toml(repo_name=repo, backend_url=backend_url)
-                    if ok:
+        # ── Step 2: Write netlify.toml to GitHub (all frontend projects) ─────
+        # Must happen BEFORE the Netlify site is created so build settings are
+        # present on first clone. For full-stack projects we also include the
+        # /api proxy when backend_url is available.
+        if has_frontend:
+            try:
+                from services.netlify_service import write_netlify_toml
+
+                proxy_url = backend_url if (is_full_stack and backend_url) else None
+                ok = write_netlify_toml(repo_name=repo, backend_url=proxy_url)
+                if ok:
+                    if proxy_url:
                         logger.info(
                             "Step 2 ✓ netlify.toml committed to %s (proxy → %s).",
-                            repo, backend_url,
+                            repo,
+                            proxy_url,
                         )
                     else:
-                        logger.warning(
-                            "Step 2 ✗ netlify.toml write failed for %s — "
-                            "Netlify will build without proxy config.", repo,
+                        logger.info(
+                            "Step 2 ✓ netlify.toml committed to %s (frontend build config only).",
+                            repo,
                         )
-                except Exception as exc:
-                    logger.exception(
-                        "Failed to write netlify.toml for %s: %s", repo, exc,
+                else:
+                    logger.warning(
+                        "Step 2 ✗ netlify.toml write failed for %s.",
+                        repo,
                     )
-            else:
-                logger.warning(
-                    "Step 2 skipped — no backend_url available for %s. "
-                    "netlify.toml proxy will not be configured.", repo,
+            except Exception as exc:
+                logger.exception(
+                    "Failed to write netlify.toml for %s: %s",
+                    repo,
+                    exc,
                 )
 
         # ── Step 3: Create Netlify site ───────────────────────────────────────
