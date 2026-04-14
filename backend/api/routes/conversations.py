@@ -48,6 +48,16 @@ JIRA_PROJECT_REQUIRED_MESSAGE = (
     "Please select a target Jira project on your Profile page before starting a chat."
 )
 
+PROJECT_TAG_KEYS: tuple[str, ...] = (
+    "has_frontend",
+    "has_backend",
+    "is_script",
+    "is_mobile_app",
+    "is_devops_program",
+    "is_full_stack",
+    "has_mixed_technologies",
+)
+
 
 def _get_owned_conversation(
     conversation_id: int,
@@ -283,23 +293,41 @@ async def start_tasking(
 
     tickets_data = result.get("tickets") or {}
 
-    # ── 0. Store project type tags from the PM's JSON ────────────
-    # Tags are written once on first tasking and never overwritten on re-runs,
-    # so the project type stays stable even if more tickets are added later.
-    if not conversation.project_tags:
-        project_tags = normalize_project_tags(result.get("projectTags"), require_any_true=True)
-        if project_tags is None:
-            project_tags = normalize_project_tags(
-                tickets_data.get("projectTags") if isinstance(tickets_data, dict) else None,
-                require_any_true=True,
-            )
+    # ── 0. Merge project type tags from PM output ────────────────
+    # On Add Requirements rounds, scope can evolve (e.g. script -> full-stack).
+    # Merge capabilities across rounds while preserving canonical constraints.
+    incoming_tags = normalize_project_tags(result.get("projectTags"), require_any_true=True)
+    if incoming_tags is None:
+        incoming_tags = normalize_project_tags(
+            tickets_data.get("projectTags") if isinstance(tickets_data, dict) else None,
+            require_any_true=True,
+        )
 
-        if project_tags is not None:
-            conversation.project_tags = project_tags
-            logger.info(
-                "Project tags for conversation %s: %s",
-                conversation_id, project_tags,
-            )
+    existing_tags = normalize_project_tags(conversation.project_tags, require_any_true=False) or {
+        key: False for key in PROJECT_TAG_KEYS
+    }
+
+    if incoming_tags is not None:
+        merged_tags = {
+            key: bool(existing_tags.get(key, False) or incoming_tags.get(key, False))
+            for key in PROJECT_TAG_KEYS
+        }
+
+        # A project cannot remain "script-only" once FE/BE capabilities exist.
+        if merged_tags.get("has_frontend") or merged_tags.get("has_backend"):
+            merged_tags["is_script"] = False
+
+        merged_tags["is_full_stack"] = (
+            merged_tags.get("has_frontend", False)
+            and merged_tags.get("has_backend", False)
+        )
+
+        conversation.project_tags = merged_tags
+        logger.info(
+            "Project tags for conversation %s updated to: %s",
+            conversation_id,
+            merged_tags,
+        )
 
     # ── 1. Create GitHub repo (first tasking only) ───────────────
     if conversation.github_repo_url is None:

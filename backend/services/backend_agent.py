@@ -30,6 +30,7 @@ async def run_backend_task(
     ticket,          # models.ticket.Ticket ORM instance
     ticket_prompt: str,
     repo_name: str,
+    skip_ci_commits: bool = False,
 ) -> dict:
     """
     Call the Backend Developer agent with a ticket, parse its JSON output,
@@ -167,13 +168,14 @@ async def run_backend_task(
 
             try:
                 summary = result.get("summary", ticket.title)
+                commit_prefix = "[skip ci] " if skip_ci_commits else ""
                 ok = await asyncio.to_thread(
                     write_file_to_repo,
                     repo_name=repo_name,
                     file_path=path,
                     content=content,
                     branch="main",
-                    commit_message=f"AI Agent: [{ticket.ticket_id}] {summary} — {path}",
+                    commit_message=f"{commit_prefix}AI Agent: [{ticket.ticket_id}] {summary} — {path}",
                 )
                 if ok:
                     files_written += 1

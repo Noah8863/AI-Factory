@@ -52,6 +52,8 @@ def normalize_project_tags(
     normalized["is_full_stack"] = (
         normalized["has_frontend"] and normalized["has_backend"]
     )
+    if normalized["has_frontend"] or normalized["has_backend"]:
+        normalized["is_script"] = False
 
     if require_any_true and not any(normalized.values()):
         return None

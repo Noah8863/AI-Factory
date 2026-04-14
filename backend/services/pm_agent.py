@@ -226,7 +226,12 @@ def _normalize_project_tags(raw_tags: dict | list | None, fallback: dict | None 
             if key in tags:
                 tags[key] = True
 
+    # Canonical constraints:
+    # - is_full_stack is derived.
+    # - is_script is only true for standalone script/CLI projects (no FE/BE).
     tags["is_full_stack"] = tags["has_frontend"] and tags["has_backend"]
+    if tags["has_frontend"] or tags["has_backend"]:
+        tags["is_script"] = False
     return tags
 
 
@@ -299,7 +304,9 @@ def _coerce_ticket_types_for_project(
     if not isinstance(ticket_rows, list):
         return
 
-    force_script_type = bool(tags.get("is_script"))
+    force_script_type = bool(tags.get("is_script")) and not (
+        tags.get("has_frontend") or tags.get("has_backend")
+    )
 
     for ticket in ticket_rows:
         if not isinstance(ticket, dict):
@@ -322,6 +329,54 @@ def _coerce_ticket_types_for_project(
         ticket["labels"] = labels
 
 
+def _enforce_fullstack_backend_handoff(
+    tickets_payload: dict,
+    tags: dict[str, bool],
+) -> None:
+    """
+    Ensure frontend tickets run after backend tickets for full-stack projects.
+
+    This creates a deterministic backend -> frontend handoff by making each
+    frontend ticket depend on the last backend ticket when needed.
+    """
+    if not (tags.get("has_frontend") and tags.get("has_backend")):
+        return
+
+    ticket_rows = tickets_payload.get("tickets")
+    if not isinstance(ticket_rows, list) or not ticket_rows:
+        return
+
+    backend_rows = [t for t in ticket_rows if isinstance(t, dict) and t.get("type") == "backend"]
+    frontend_rows = [t for t in ticket_rows if isinstance(t, dict) and t.get("type") == "frontend"]
+    if not backend_rows or not frontend_rows:
+        return
+
+    def _seq_value(ticket: dict) -> int:
+        try:
+            return int(ticket.get("sequence") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    last_backend = max(
+        backend_rows,
+        key=lambda t: (_seq_value(t), str(t.get("id", ""))),
+    )
+    last_backend_id = str(last_backend.get("id") or "").strip()
+    last_backend_seq = _seq_value(last_backend)
+    if not last_backend_id:
+        return
+
+    for ticket in frontend_rows:
+        deps = [str(dep).strip() for dep in (ticket.get("dependsOn") or []) if str(dep).strip()]
+        if last_backend_id not in deps:
+            deps.append(last_backend_id)
+        ticket["dependsOn"] = list(dict.fromkeys(deps))
+
+        seq = _seq_value(ticket)
+        if seq <= last_backend_seq:
+            ticket["sequence"] = last_backend_seq + 1
+
+
 def normalize_tasking_payload_for_storage(
     tickets_payload: dict | None,
     project_tags: dict | None = None,
@@ -342,6 +397,7 @@ def normalize_tasking_payload_for_storage(
     )
     tickets_payload["projectTags"] = normalized_tags
     _coerce_ticket_types_for_project(tickets_payload, normalized_tags)
+    _enforce_fullstack_backend_handoff(tickets_payload, normalized_tags)
     return tickets_payload
 
 
@@ -522,6 +578,9 @@ well-structured README.md for a project that was just built by AI developer agen
 Use the conversation history provided to understand what the project does, its
 features, and its tech stack. Write the README in Markdown.
 
+Use the provided implementation handoff and repository file tree as the source
+of truth for concrete commands and file paths.
+
 Include these sections (skip any that don't apply):
 
 1. **Project title** — as an H1
@@ -545,6 +604,11 @@ Script/CLI-specific requirements:
     - macOS/Linux shell
 - Include at least one real usage example (with arguments if relevant) and expected output behavior.
 - If executable packaging is part of scope, add a **Build Executable** section describing how to produce and where to find the `.exe` artifact.
+
+Accuracy rules:
+- Never reference files/commands that are not present in the repository file tree context.
+- Never use placeholder filenames (like `main.py`) unless that file exists in the repository.
+- If implementation handoff and conversation conflict, prefer implementation handoff for technical details.
 
 Keep it concise and practical. Output ONLY the raw Markdown — no code fences
 wrapping the entire document, no preamble, no explanation.
@@ -631,6 +695,8 @@ def generate_readme(
     project_name: str = "Project",
     live_url: str | None = None,
     project_tags: dict | None = None,
+    repo_files: list[str] | None = None,
+    implementation_handoff: list[dict] | None = None,
 ) -> str:
     """
     Generate a README.md from the PM conversation history.
@@ -639,11 +705,183 @@ def generate_readme(
         history:      PM conversation messages (role/content dicts).
         project_name: Human-friendly project title derived from the repo slug.
         live_url:     Optional GitHub Pages URL to embed in the Live Demo section.
+        project_tags: Normalized project tags dict from conversation metadata.
+        repo_files:   Repository file tree from main branch.
+        implementation_handoff: Ticket-level summaries and generated file lists.
 
     Returns the raw Markdown string ready to be committed to the repo.
     """
+    def _normalize_repo_path(path: str) -> str:
+        return (path or "").replace("\\", "/").strip("/").lower()
+
+    def _build_readme_handoff_context() -> str:
+        sections: list[str] = []
+
+        safe_repo_files = [
+            str(path).replace("\\", "/").strip("/")
+            for path in (repo_files or [])
+            if path
+        ]
+        if safe_repo_files:
+            file_lines = "\n".join(f"- {path}" for path in safe_repo_files[:220])
+            sections.append(
+                "Repository files currently on main branch (source of truth):\n"
+                f"{file_lines}"
+            )
+
+        if implementation_handoff:
+            handoff_lines: list[str] = []
+            for row in implementation_handoff[:40]:
+                if not isinstance(row, dict):
+                    continue
+                ticket_id = row.get("id", "?")
+                title = str(row.get("title", "Untitled")).strip()
+                status = row.get("status", "unknown")
+                summary = str(row.get("summary", "")).strip()
+                notes = str(row.get("notes", "")).strip()
+                files = [
+                    str(path).replace("\\", "/").strip("/")
+                    for path in (row.get("generated_files") or [])[:10]
+                    if path
+                ]
+
+                line = f"- [{ticket_id}] {title} (status: {status})"
+                if summary:
+                    line += f" | summary: {summary[:180]}"
+                if files:
+                    line += f" | files: {', '.join(files)}"
+                if notes:
+                    line += f" | notes: {notes[:160]}"
+                handoff_lines.append(line)
+
+            if handoff_lines:
+                sections.append(
+                    "Developer agent implementation handoff:\n"
+                    + "\n".join(handoff_lines)
+                )
+
+        if not sections:
+            return "Implementation handoff is unavailable. Prefer conservative, generic setup instructions."
+        return "\n\n".join(sections)
+
+    def _detect_script_entrypoint() -> str | None:
+        safe_repo_files = [
+            str(path).replace("\\", "/").strip("/")
+            for path in (repo_files or [])
+            if path
+        ]
+        py_candidates = [
+            path for path in safe_repo_files
+            if path.lower().endswith(".py")
+            and not path.lower().startswith("tests/")
+            and not path.lower().startswith("test/")
+            and not path.lower().startswith(".github/")
+            and "__pycache__" not in path.lower()
+            and not path.lower().endswith("_test.py")
+        ]
+        if not py_candidates:
+            return None
+
+        hinted_basenames: set[str] = set()
+        for row in implementation_handoff or []:
+            if not isinstance(row, dict):
+                continue
+            for path in row.get("generated_files") or []:
+                safe = str(path).replace("\\", "/").strip("/")
+                if safe.lower().endswith(".py"):
+                    hinted_basenames.add(os.path.basename(safe).lower())
+
+        preferred_names = {"main.py", "run.py", "app.py", "cli.py", "__main__.py"}
+
+        ranked = sorted(
+            py_candidates,
+            key=lambda path: (
+                0 if os.path.basename(path).lower() in hinted_basenames else 1,
+                path.count("/"),
+                0 if os.path.basename(path).lower() in preferred_names else 1,
+                len(path),
+                path.lower(),
+            ),
+        )
+        return ranked[0]
+
+    def _correct_script_readme_commands(readme_md: str, entrypoint: str | None) -> str:
+        if not tags.get("is_script"):
+            return readme_md
+
+        safe_repo_files = [
+            str(path).replace("\\", "/").strip("/")
+            for path in (repo_files or [])
+            if path
+        ]
+        known_py_paths = {
+            _normalize_repo_path(path)
+            for path in safe_repo_files
+            if path.lower().endswith(".py")
+        }
+        basename_counts: dict[str, int] = {}
+        basename_to_path: dict[str, str] = {}
+        for path in known_py_paths:
+            base = os.path.basename(path)
+            basename_counts[base] = basename_counts.get(base, 0) + 1
+            if base not in basename_to_path:
+                basename_to_path[base] = path
+
+        if not known_py_paths:
+            return readme_md
+
+        cmd_pattern = re.compile(
+            r"(?P<prefix>\b(?:py|python|python3)\b\s+)(?P<script>[^\s`\"']+\.py)\b",
+            re.IGNORECASE,
+        )
+
+        def _replace_cmd(match: re.Match) -> str:
+            script = _normalize_repo_path(match.group("script"))
+            if script in known_py_paths:
+                return match.group(0)
+
+            base = os.path.basename(script)
+            if base in basename_to_path and basename_counts.get(base, 0) == 1:
+                return f"{match.group('prefix')}{basename_to_path[base]}"
+
+            if entrypoint:
+                return f"{match.group('prefix')}{entrypoint}"
+            return match.group(0)
+
+        corrected = cmd_pattern.sub(_replace_cmd, readme_md)
+
+        if entrypoint:
+            entry_basename = re.escape(os.path.basename(entrypoint))
+            has_entry_command = re.search(
+                rf"\b(?:py|python|python3)\b\s+[^\n`]*{entry_basename}\b",
+                corrected,
+                re.IGNORECASE,
+            )
+            if not has_entry_command:
+                corrected = corrected.rstrip() + (
+                    "\n\n## Run the Script\n\n"
+                    "Windows PowerShell:\n"
+                    "```powershell\n"
+                    f"py {entrypoint}\n"
+                    "```\n\n"
+                    "macOS/Linux:\n"
+                    "```bash\n"
+                    f"python {entrypoint}\n"
+                    "```\n"
+                )
+
+        return corrected
+
     tags = project_tags if isinstance(project_tags, dict) else {}
     tags_json = json.dumps(tags, sort_keys=True)
+    handoff_context = _build_readme_handoff_context()
+    script_entrypoint = _detect_script_entrypoint() if tags.get("is_script") else None
+    script_entrypoint_hint = (
+        f"Detected primary runnable script file: {script_entrypoint}\n"
+        "Use this file for run/build commands unless a different launcher is explicitly present in the repository tree.\n\n"
+        if script_entrypoint
+        else ""
+    )
 
     live_url_line = (
         f"The project is deployed and live at: {live_url}\n"
@@ -660,6 +898,9 @@ def generate_readme(
         f"The project is called \"{project_name}\".\n\n"
         f"Project tags (JSON): {tags_json}\n\n"
         f"{live_url_line}"
+        f"{script_entrypoint_hint}"
+        "Implementation handoff context:\n"
+        f"{handoff_context}\n\n"
         "Based on the conversation history above, write a README.md for this project.\n"
         f"{deployment_context_line}Write the README as if it "
         "is being added to the repository root."
@@ -672,4 +913,7 @@ def generate_readme(
         system=_README_SYSTEM_PROMPT,
         messages=messages,
     )
-    return response.content[0].text
+
+    readme_md = response.content[0].text
+    readme_md = _correct_script_readme_commands(readme_md, script_entrypoint)
+    return readme_md

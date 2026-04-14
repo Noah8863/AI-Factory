@@ -27,6 +27,7 @@ Public API
 import asyncio
 import json
 import logging
+import re
 import traceback
 from datetime import datetime
 
@@ -238,6 +239,117 @@ def _next_split_ticket_id(
         if candidate not in existing_ids:
             return candidate
         suffix += 1
+
+
+def _extract_backend_routes_from_text(content: str) -> list[tuple[str, str]]:
+    """Extract likely API routes from backend source text."""
+    if not content:
+        return []
+
+    routes: list[tuple[str, str]] = []
+
+    # Express style: app.get('/path'), router.post('/path')
+    for method, path in re.findall(
+        r"\b(?:app|router)\.(get|post|put|patch|delete)\(\s*['\"]([^'\"]+)['\"]",
+        content,
+        flags=re.IGNORECASE,
+    ):
+        if path.startswith("/"):
+            routes.append((method.upper(), path))
+
+    # FastAPI style: @app.get('/path'), @router.post('/path')
+    for method, path in re.findall(
+        r"@\s*(?:app|router)\.(get|post|put|patch|delete)\(\s*['\"]([^'\"]+)['\"]",
+        content,
+        flags=re.IGNORECASE,
+    ):
+        if path.startswith("/"):
+            routes.append((method.upper(), path))
+
+    # Basic Node http server style: if (url === '/api/ip')
+    for path in re.findall(
+        r"\burl\s*===\s*['\"]([^'\"]+)['\"]",
+        content,
+        flags=re.IGNORECASE,
+    ):
+        if path.startswith("/"):
+            routes.append(("ANY", path))
+
+    deduped: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for method, path in routes:
+        key = (method, path)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(key)
+    return deduped
+
+
+def _build_backend_api_contract(conversation_id: int, db: Session, max_routes: int = 40) -> str:
+    """
+    Build an API contract summary from completed backend ticket outputs.
+
+    This is passed into frontend prompts so frontend code uses implemented
+    backend routes instead of inventing endpoint names.
+    """
+    backend_done = (
+        db.query(Ticket)
+        .filter(
+            Ticket.conversation_id == conversation_id,
+            Ticket.type == "backend",
+            Ticket.status == "done",
+        )
+        .order_by(Ticket.sequence.asc().nullslast(), Ticket.id.asc())
+        .all()
+    )
+
+    if not backend_done:
+        return ""
+
+    route_entries: list[tuple[str, str, str]] = []  # (method, path, source)
+    seen_routes: set[tuple[str, str]] = set()
+
+    for ticket in backend_done:
+        if not ticket.agent_output:
+            continue
+        try:
+            payload = json.loads(ticket.agent_output)
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+
+        for file_obj in payload.get("files", []) or []:
+            if not isinstance(file_obj, dict):
+                continue
+
+            path = str(file_obj.get("path", "")).replace("\\", "/").strip("/")
+            content = str(file_obj.get("content", "") or "")
+            if not content:
+                continue
+
+            for method, route_path in _extract_backend_routes_from_text(content):
+                route_key = (method, route_path)
+                if route_key in seen_routes:
+                    continue
+                seen_routes.add(route_key)
+                route_entries.append((method, route_path, path or f"{ticket.ticket_id}"))
+
+    if not route_entries:
+        return ""
+
+    lines = [
+        f"- `{method} {route}` from `{source}`"
+        for method, route, source in route_entries[:max_routes]
+    ]
+    joined = "\n".join(lines)
+    return (
+        "## Backend API Contract (from completed backend tickets)\n\n"
+        "These routes are already implemented in backend code. Reuse them exactly "
+        "for frontend API calls unless this ticket explicitly requires backend API changes.\n\n"
+        f"{joined}\n\n"
+    )
 
 
 async def _auto_split_failed_ticket(
@@ -580,7 +692,12 @@ async def run_ticket(
 
     repo_name = conversation.github_repo_name or ""
     project_tags = conversation.project_tags or {}
-    effective_ticket_type = "script" if project_tags.get("is_script", False) else ticket.type
+    has_frontend_tag = bool(project_tags.get("has_frontend", False))
+    has_backend_tag = bool(project_tags.get("has_backend", False))
+    is_pure_script_project = bool(project_tags.get("is_script", False)) and not (
+        has_frontend_tag or has_backend_tag
+    )
+    effective_ticket_type = "script" if is_pure_script_project else ticket.type
 
     if effective_ticket_type != ticket.type:
         logger.info(
@@ -624,6 +741,17 @@ async def run_ticket(
             "Repository currently appears empty or file listing was unavailable.\n\n"
         )
 
+    backend_api_contract_block = ""
+    if effective_ticket_type == "frontend":
+        backend_api_contract_block = _build_backend_api_contract(conversation.id, db)
+        if not backend_api_contract_block:
+            backend_api_contract_block = (
+                "## Backend API Contract (from completed backend tickets)\n\n"
+                "No completed backend API routes were detected yet. If this ticket needs API "
+                "integration, reuse existing backend paths from repository files and avoid "
+                "inventing new endpoint names.\n\n"
+            )
+
     # Build a rich prompt from ticket metadata
     deps_str = ", ".join(ticket.depends_on) if ticket.depends_on else "none"
     ticket_prompt = (
@@ -636,7 +764,9 @@ async def run_ticket(
         "- The ticket title is only a short label.\n"
         "- Acceptance Criteria below is the source of truth and must drive implementation details.\n"
         "- Do not generate placeholder/demo artifacts (for example HelloWorld, demo-only components, or toy scaffolds) unless explicitly required by the criteria.\n\n"
+        "- For frontend tickets, follow the Backend API Contract routes exactly when provided.\n\n"
         f"{repo_files_block}"
+        f"{backend_api_contract_block}"
         f"## Acceptance Criteria\n\n{ticket.description}\n\n"
         f"## Target Repository\n`{repo_name}`\n"
     )
@@ -651,6 +781,7 @@ async def run_ticket(
                 ticket=ticket,
                 ticket_prompt=ticket_prompt,
                 repo_name=repo_name,
+                skip_ci_commits=True,
             )
         elif effective_ticket_type == "frontend":
             logger.info(
@@ -661,6 +792,7 @@ async def run_ticket(
                 ticket=ticket,
                 ticket_prompt=ticket_prompt,
                 repo_name=repo_name,
+                skip_ci_commits=True,
             )
         elif effective_ticket_type == "script":
             logger.info(
@@ -672,6 +804,7 @@ async def run_ticket(
                 ticket_prompt=ticket_prompt,
                 repo_name=repo_name,
                 existing_repo_files=existing_repo_files,
+                skip_ci_commits=True,
             )
         else:
             raise RuntimeError(
@@ -755,6 +888,7 @@ async def run_all_tickets(
     user_id: int,
     db: Session,
     allow_incomplete_deploy: bool = False,
+    force_post_completion: bool = False,
 ) -> dict:
     """
     Run all pending tickets for a conversation in dependency order.
@@ -787,6 +921,21 @@ async def run_all_tickets(
         runnable = get_runnable_tickets(conversation_id, None, db)
         if not runnable:
             break
+
+        project_tags = conversation.project_tags or {}
+        prefer_backend_first = bool(
+            project_tags.get("has_frontend", False)
+            and project_tags.get("has_backend", False)
+        )
+        if prefer_backend_first:
+            runnable_backend = [t for t in runnable if t.type == "backend"]
+            if runnable_backend:
+                logger.info(
+                    "Backend-first handoff enabled for conversation %s; prioritizing backend wave: %s",
+                    conversation_id,
+                    [t.ticket_id for t in runnable_backend],
+                )
+                runnable = runnable_backend
 
         # All tickets at the lowest sequence share a "ready" wave and can
         # run concurrently.  Tickets without a sequence are treated as last.
@@ -858,7 +1007,15 @@ async def run_all_tickets(
     )
 
     # ── Post-completion: Netlify deployment + README ─────────────────────────────
-    if (all_done or allow_incomplete_deploy) and conversation.github_repo_name:
+    made_ticket_progress = (done_count + fail_count) > 0
+
+    should_run_post_completion = (
+        conversation.github_repo_name
+        and (all_done or allow_incomplete_deploy)
+        and (force_post_completion or made_ticket_progress)
+    )
+
+    if should_run_post_completion:
         import os
         from services.github_service import write_file_to_repo
 
@@ -1047,6 +1204,58 @@ async def run_all_tickets(
         # Derive a human-friendly project name from the repo slug
         project_name = repo.replace("-", " ").title()
 
+        # Build a compact implementation handoff from developer agent outputs
+        # so README generation reflects what was actually created.
+        implementation_handoff: list[dict] = []
+        for t in sorted(all_tickets, key=lambda row: (row.sequence or 999, row.ticket_id or "")):
+            output = {}
+            if t.agent_output:
+                try:
+                    parsed = json.loads(t.agent_output)
+                    if isinstance(parsed, dict):
+                        output = parsed
+                except Exception:
+                    output = {}
+
+            generated_files: list[str] = []
+            for f in output.get("files", []) or []:
+                if not isinstance(f, dict):
+                    continue
+                path = str(f.get("path", "")).replace("\\", "/").strip("/")
+                if path:
+                    generated_files.append(path)
+
+            implementation_handoff.append(
+                {
+                    "id": t.ticket_id,
+                    "type": t.type,
+                    "phase": t.phase,
+                    "sequence": t.sequence,
+                    "title": t.title,
+                    "status": t.status,
+                    "summary": str(output.get("summary", "") or ""),
+                    "notes": str(output.get("notes", "") or ""),
+                    "generated_files": generated_files[:50],
+                }
+            )
+
+        repo_files: list[str] = []
+        try:
+            from services.github_service import list_repo_files
+
+            repo_files = await asyncio.to_thread(
+                list_repo_files,
+                repo,
+                "main",
+                500,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Could not fetch repository tree for README generation in %s: %s",
+                repo,
+                exc,
+            )
+
         try:
             from services.pm_agent import generate_readme
 
@@ -1064,6 +1273,8 @@ async def run_all_tickets(
                     "is_full_stack": is_full_stack,
                     "has_mixed_technologies": has_mixed_technologies,
                 },
+                repo_files=repo_files,
+                implementation_handoff=implementation_handoff,
             )
 
             ok = write_file_to_repo(
@@ -1113,7 +1324,7 @@ async def run_all_tickets(
                 file_path="CLAUDE.md",
                 content=claude_md,
                 branch="main",
-                commit_message="AI Agent: add CLAUDE.md project context",
+                commit_message="[skip ci] AI Agent: add CLAUDE.md project context",
             )
             if ok:
                 logger.info("CLAUDE.md committed to %s.", repo)
@@ -1137,6 +1348,11 @@ async def run_all_tickets(
                 )
             conversation.updated_at = datetime.utcnow()
             db.commit()
+    elif conversation.github_repo_name and (all_done or allow_incomplete_deploy):
+        logger.info(
+            "Skipping post-completion deploy/docs for conversation %s: no new ticket progress in this runner.",
+            conversation_id,
+        )
 
     # ── Update idea status based on final ticket outcomes ─────────────────────
     if not allow_incomplete_deploy and conversation and conversation.idea_id:
@@ -1208,6 +1424,7 @@ async def run_deploy_and_docs_bg(
             user_id,
             db,
             allow_incomplete_deploy=allow_incomplete,
+            force_post_completion=True,
         )
     except Exception as exc:
         logger.exception(
