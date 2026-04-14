@@ -191,6 +191,7 @@ export default function Dashboard() {
   // ── History state ────────────────────────────────────────────
   const [ideas, setIdeas] = useState([])
   const [loadingIdeas, setLoadingIdeas] = useState(true)
+  const [isHistoryHydrating, setIsHistoryHydrating] = useState(false)
   const [openingIdeaId, setOpeningIdeaId] = useState(null)  // idea.id currently loading
   const [deleteConfirm, setDeleteConfirm] = useState(null)   // idea pending deletion
   const [deleting, setDeleting] = useState(false)
@@ -218,12 +219,6 @@ export default function Dashboard() {
   useEffect(() => {
     localStorage.setItem(DASHBOARD_NAV_KEY, activeNav)
   }, [activeNav])
-
-  useEffect(() => {
-    if (activeNav === 'chat' && !conversation) {
-      setActiveNav('new')
-    }
-  }, [activeNav, conversation])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.visualViewport) return
@@ -397,22 +392,32 @@ export default function Dashboard() {
 
   // ── Fetch tickets for all ideas (My Ideas page) ─────────────
   const fetchAllIdeaTickets = useCallback(async (ideaList) => {
+    if (!ideaList?.length) {
+      setIsHistoryHydrating(false)
+      return {}
+    }
+
+    setIsHistoryHydrating(true)
     const results = {}
-    await Promise.all(
-      ideaList.map(async (idea) => {
-        try {
-          const res = await getIdeaTickets(idea.id)
-          const { tickets, still_pending } = res.data
-          if (tickets.length > 0) {
-            results[idea.id] = { tickets, stillPending: still_pending }
+    try {
+      await Promise.all(
+        ideaList.map(async (idea) => {
+          try {
+            const res = await getIdeaTickets(idea.id)
+            const { tickets, still_pending } = res.data
+            if (tickets.length > 0) {
+              results[idea.id] = { tickets, stillPending: still_pending }
+            }
+          } catch {
+            // No conversation or tickets for this idea — skip
           }
-        } catch {
-          // No conversation or tickets for this idea — skip
-        }
-      })
-    )
-    setIdeaTicketsMap(prev => ({ ...prev, ...results }))
-    return results
+        })
+      )
+      setIdeaTicketsMap(prev => ({ ...prev, ...results }))
+      return results
+    } finally {
+      setIsHistoryHydrating(false)
+    }
   }, [])
 
   // Fetch idea tickets once when switching to history tab
@@ -495,7 +500,10 @@ export default function Dashboard() {
       // Fetch current ticket status for this conversation
       await fetchTickets(normalizedConv.id)
     } catch {
-      // no conversation yet or error — nothing to open
+      // If Active was requested but no conversation could be restored, fall back.
+      if (activeNav === 'chat') {
+        setActiveNav('new')
+      }
     } finally {
       setOpeningIdeaId(null)
     }
@@ -527,6 +535,14 @@ export default function Dashboard() {
 
     setActiveNav('new')
   }
+
+  useEffect(() => {
+    // Restore the Active tab from cross-page navigation once idea data is loaded.
+    if (activeNav !== 'chat') return
+    if (conversation || openingIdeaId || loadingIdeas) return
+
+    handleOpenActiveChat()
+  }, [activeNav, conversation, openingIdeaId, loadingIdeas, ideas])
 
   // ── Delete idea ──────────────────────────────────────────────
   const handleDeleteIdea = (idea) => {
@@ -610,6 +626,7 @@ export default function Dashboard() {
     setShowReadyBanner(false)
     setTaskingResult(null)
     setIsTaskingLoading(true)
+    setActiveNav('chat')
     setDevInProcess(false)
     setAgentRunError('')
     setAgentTickets([])
@@ -737,6 +754,21 @@ export default function Dashboard() {
   const activeChatDisabled = !activeChatAvailable || !!openingIdeaId
   const uiLockedByTasking = isTaskingLoading
   const navLockedHint = 'Please wait while Jira tickets are being created.'
+  const shouldShowHistorySkeletons = activeNav === 'history' && (loadingIdeas || isHistoryHydrating)
+  const historySkeletonCount = loadingIdeas
+    ? 3
+    : Math.min(Math.max(ideas.length, 3), 6)
+
+  const handleSetActiveNav = (nextNav) => {
+    if (uiLockedByTasking) return
+    setActiveNav(nextNav)
+  }
+
+  const handleOpenActiveChatSafe = () => {
+    if (uiLockedByTasking) return
+    handleOpenActiveChat()
+  }
+
   const activeChatTitle = ideas.length > 0
     ? 'Open most recent idea chat'
     : conversation
@@ -754,7 +786,7 @@ export default function Dashboard() {
     ? truncate(getIdeaSummaryText(deleteConfirm), 110)
     : ''
 
-  const dashboardClassName = `dashboard${activeNav === 'chat' ? ' dashboard--chat' : ''}${isKeyboardOpen ? ' dashboard--keyboard-open' : ''}${isDecisionMode ? ' dashboard--decision-active' : ''}`
+  const dashboardClassName = `dashboard${activeNav === 'chat' ? ' dashboard--chat' : ''}${isKeyboardOpen ? ' dashboard--keyboard-open' : ''}${isDecisionMode ? ' dashboard--decision-active' : ''}${uiLockedByTasking ? ' dashboard--tasking-lock' : ''}`
   const dashboardStyle = {
     '--mobile-chat-offset': `${effectiveMobileOffset}px`,
   }
@@ -843,7 +875,7 @@ export default function Dashboard() {
       <nav className="bottom-tabs">
         <button
           className={`bottom-tabs__item ${activeNav === 'new' ? 'bottom-tabs__item--active' : ''}`}
-          onClick={() => setActiveNav('new')}
+          onClick={() => handleSetActiveNav('new')}
           disabled={uiLockedByTasking}
           title={uiLockedByTasking ? navLockedHint : undefined}
         >
@@ -852,7 +884,7 @@ export default function Dashboard() {
         </button>
         <button
           className={`bottom-tabs__item ${activeNav === 'chat' ? 'bottom-tabs__item--active' : ''} ${activeChatDisabled || uiLockedByTasking ? 'bottom-tabs__item--disabled' : ''}`}
-          onClick={handleOpenActiveChat}
+          onClick={handleOpenActiveChatSafe}
           disabled={activeChatDisabled || uiLockedByTasking}
           title={uiLockedByTasking ? navLockedHint : activeChatTitle}
         >
@@ -861,7 +893,7 @@ export default function Dashboard() {
         </button>
         <button
           className={`bottom-tabs__item ${activeNav === 'history' ? 'bottom-tabs__item--active' : ''}`}
-          onClick={() => setActiveNav('history')}
+          onClick={() => handleSetActiveNav('history')}
           disabled={uiLockedByTasking}
           title={uiLockedByTasking ? navLockedHint : undefined}
         >
@@ -898,7 +930,7 @@ export default function Dashboard() {
         <nav className="sidebar__nav">
           <button
             className={`sidebar__item ${activeNav === 'new' ? 'sidebar__item--active' : ''}`}
-            onClick={() => setActiveNav('new')}
+            onClick={() => handleSetActiveNav('new')}
             disabled={uiLockedByTasking}
             title={uiLockedByTasking ? navLockedHint : undefined}
           >
@@ -908,7 +940,7 @@ export default function Dashboard() {
 
           <button
             className={`sidebar__item ${activeNav === 'chat' ? 'sidebar__item--active' : ''} ${activeChatDisabled || uiLockedByTasking ? 'sidebar__item--disabled' : ''}`}
-            onClick={handleOpenActiveChat}
+            onClick={handleOpenActiveChatSafe}
             disabled={activeChatDisabled || uiLockedByTasking}
             title={uiLockedByTasking ? navLockedHint : activeChatTitle}
           >
@@ -924,7 +956,7 @@ export default function Dashboard() {
 
           <button
             className={`sidebar__item ${activeNav === 'history' ? 'sidebar__item--active' : ''}`}
-            onClick={() => setActiveNav('history')}
+            onClick={() => handleSetActiveNav('history')}
             disabled={uiLockedByTasking}
             title={uiLockedByTasking ? navLockedHint : undefined}
           >
@@ -1144,15 +1176,36 @@ export default function Dashboard() {
               <p className="idea-panel__sub">All submitted ideas and their current status.</p>
             </div>
 
-            {loadingIdeas ? (
-              <div className="history-panel__loading">
-                <span style={{ width: 24, height: 24, border: '2px solid', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} />
+            {shouldShowHistorySkeletons ? (
+              <div className="ideas-list ideas-list--skeleton" aria-busy="true" aria-live="polite">
+                {Array.from({ length: historySkeletonCount }).map((_, idx) => (
+                  <div key={`idea-skeleton-${idx}`} className="idea-card idea-card--skeleton">
+                    <div className="idea-card__top">
+                      <div className="idea-card__pills">
+                        <span className="idea-card__skeleton idea-card__skeleton--pill" />
+                        <span className="idea-card__skeleton idea-card__skeleton--pill idea-card__skeleton--pill-short" />
+                      </div>
+                      <div className="idea-card__meta-right">
+                        <span className="idea-card__skeleton idea-card__skeleton--tag" />
+                        <span className="idea-card__skeleton idea-card__skeleton--tag idea-card__skeleton--tag-short" />
+                      </div>
+                    </div>
+                    <p className="idea-card__content idea-card__content--skeleton">
+                      <span className="idea-card__skeleton idea-card__skeleton--line" />
+                      <span className="idea-card__skeleton idea-card__skeleton--line idea-card__skeleton--line-short" />
+                    </p>
+                    <div className="idea-card__actions">
+                      <span className="idea-card__skeleton idea-card__skeleton--button" />
+                      <span className="idea-card__skeleton idea-card__skeleton--button idea-card__skeleton--button-ghost" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : ideas.length === 0 ? (
               <div className="history-panel__empty">
                 <span className="material-icons">inbox</span>
                 <p>No ideas submitted yet.</p>
-                <button className="template-chip" onClick={() => setActiveNav('new')}>
+                <button className="template-chip" onClick={() => handleSetActiveNav('new')}>
                   <span className="material-icons">add</span>
                   Submit your first idea
                 </button>
