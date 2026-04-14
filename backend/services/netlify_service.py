@@ -15,7 +15,7 @@ Public API
       Creates a Netlify site linked to the GitHub repo with build settings
       (command: 'npm run build', publish directory: 'dist').
       Does NOT write netlify.toml — that is the caller's responsibility.
-      Returns {"site_url": str, "site_id": str} on success, None on failure.
+      Returns {"site_url": str, "site_id": str} on success or {"error": str} on failure.
 
 Double-Step deployment order (enforced by agent_runner.py)
 ────────────────────────────────────────────────────────────
@@ -61,6 +61,61 @@ def _headers() -> dict:
         "Authorization": f"Bearer {_auth_token()}",
         "Content-Type": "application/json",
     }
+
+
+def _find_existing_site_for_repo(repo_full_name: str, site_name: str | None = None) -> dict | None:
+    """
+    Best-effort lookup for an existing Netlify site already linked to repo_full_name.
+
+    This prevents repeated /sites create failures for repos that are already connected.
+    """
+    url = f"{_api_base()}/sites"
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=30)
+    except requests.RequestException as exc:
+        logger.warning("Failed to query Netlify sites list: %s", exc)
+        return None
+
+    if resp.status_code != 200:
+        logger.warning(
+            "Failed to list Netlify sites (HTTP %s): %s",
+            resp.status_code,
+            resp.text[:240],
+        )
+        return None
+
+    try:
+        sites = resp.json()
+    except ValueError:
+        logger.warning("Netlify sites list returned non-JSON response.")
+        return None
+
+    if not isinstance(sites, list):
+        return None
+
+    target_repo = repo_full_name.strip().lower()
+    target_name = (site_name or "").strip().lower()
+
+    for site in sites:
+        linked_repo = ((site.get("repo") or {}).get("repo") or "").strip().lower()
+        if linked_repo and linked_repo == target_repo:
+            logger.info(
+                "Found existing Netlify site '%s' already linked to %s.",
+                site.get("name", "?"),
+                repo_full_name,
+            )
+            return _parse_site_response(site, repo_full_name)
+
+    if target_name:
+        for site in sites:
+            if (site.get("name") or "").strip().lower() == target_name:
+                logger.info(
+                    "Found existing Netlify site by name '%s' for repo lookup fallback.",
+                    site.get("name", "?"),
+                )
+                return _parse_site_response(site, repo_full_name)
+
+    return None
 
 
 # ── netlify.toml ──────────────────────────────────────────────────────────────
@@ -122,7 +177,7 @@ def write_netlify_toml(repo_name: str, backend_url: str) -> bool:
 def create_netlify_site(
     site_name: str,
     repo_full_name: str,
-) -> dict | None:
+) -> dict:
     """
     Create a Netlify site linked to the GitHub repo, configured for CD.
 
@@ -141,15 +196,21 @@ def create_netlify_site(
 
     Returns:
         {"site_url": str, "site_id": str}  on success.
-        None                                on failure.
+        {"error": str}                     on failure.
     """
     token = _auth_token()
     if not token:
-        logger.error(
-            "NETLIFY_AUTH_TOKEN is not set — skipping Netlify site creation for '%s'.",
-            site_name,
+        message = (
+            "NETLIFY_AUTH_TOKEN is not set — skipping Netlify site creation for "
+            f"'{site_name}'."
         )
-        return None
+        logger.error(message)
+        return {"error": message}
+
+    # Fast path: if this repo is already linked, reuse the existing site.
+    existing = _find_existing_site_for_repo(repo_full_name, site_name)
+    if existing:
+        return existing
 
     team_id = os.getenv("NETLIFY_TEAM_ID", "")
 
@@ -175,8 +236,9 @@ def create_netlify_site(
     try:
         resp = requests.post(url, json=payload, headers=_headers(), timeout=30)
     except requests.RequestException as exc:
-        logger.error("Netlify API request failed for '%s': %s", site_name, exc)
-        return None
+        message = f"Netlify API request failed for '{site_name}': {exc}"
+        logger.error(message)
+        return {"error": message}
 
     if resp.status_code in (200, 201):
         return _parse_site_response(resp.json(), repo_full_name)
@@ -191,17 +253,36 @@ def create_netlify_site(
         try:
             retry = requests.post(url, json=payload, headers=_headers(), timeout=30)
         except requests.RequestException as exc:
-            logger.error("Netlify retry request failed: %s", exc)
-            return None
+            message = f"Netlify retry request failed: {exc}"
+            logger.error(message)
+            return {"error": message}
 
         if retry.status_code in (200, 201):
             return _parse_site_response(retry.json(), repo_full_name)
 
-    logger.error(
-        "Failed to create Netlify site '%s': HTTP %s — %s",
-        site_name, resp.status_code, resp.text[:400],
+        # Repo may already be linked to a site despite 422 on create.
+        existing_after_retry = _find_existing_site_for_repo(repo_full_name, site_name)
+        if existing_after_retry:
+            return existing_after_retry
+
+        message = (
+            f"Failed to create Netlify site '{site_name}' after 422 retry "
+            f"(HTTP {retry.status_code}): {retry.text[:400]}"
+        )
+        logger.error(message)
+        return {"error": message}
+
+    # Last chance: check whether a linked site already exists for this repo.
+    existing_after_failure = _find_existing_site_for_repo(repo_full_name, site_name)
+    if existing_after_failure:
+        return existing_after_failure
+
+    message = (
+        f"Failed to create Netlify site '{site_name}': HTTP {resp.status_code} — "
+        f"{resp.text[:400]}"
     )
-    return None
+    logger.error(message)
+    return {"error": message}
 
 
 def _parse_site_response(data: dict, repo_full_name: str) -> dict:

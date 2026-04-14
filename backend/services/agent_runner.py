@@ -403,6 +403,36 @@ async def _auto_split_failed_ticket(
     for child in created_children:
         db.refresh(child)
 
+    # Keep Jira board state aligned: the superseded parent ticket is now
+    # considered resolved by auto-split, so move its Jira issue to Done.
+    if ticket.jira_issue_key:
+        try:
+            from models.jira_token import JiraToken
+            from services.jira_service import transition_jira_issue
+
+            token_row = db.query(JiraToken).filter(JiraToken.user_id == user_id).first()
+            cloud_id = token_row.jira_cloud_id if token_row else None
+            if cloud_id:
+                await transition_jira_issue(
+                    user_id=user_id,
+                    db=db,
+                    cloud_id=cloud_id,
+                    issue_key=ticket.jira_issue_key,
+                    target_status="Done",
+                )
+            else:
+                logger.warning(
+                    "Auto-split parent %s has Jira key %s but no cloud_id was found.",
+                    ticket.ticket_id,
+                    ticket.jira_issue_key,
+                )
+        except Exception as exc:
+            logger.warning(
+                "Failed to transition auto-split parent Jira issue for %s: %s",
+                ticket.ticket_id,
+                exc,
+            )
+
     # Best-effort Jira mirroring for split children so the board stays in sync.
     if conversation.jira_project_key:
         try:
@@ -935,16 +965,20 @@ async def run_all_tickets(
                     site_name=repo,
                     repo_full_name=repo_full_name,
                 )
-                if netlify_result:
-                    live_url = netlify_result["site_url"]
+                live_url = (netlify_result or {}).get("site_url")
+                if live_url:
                     logger.info(
                         "Step 3 ✓ Netlify site ready for %s → %s", repo, live_url,
                     )
                 else:
-                    deployment_error = "Netlify site creation returned no live URL."
+                    deployment_error = (
+                        (netlify_result or {}).get("error")
+                        or "Netlify site creation returned no live URL."
+                    )
                     logger.warning(
-                        "Step 3 ✗ Netlify site creation returned None for %s — "
-                        "README will omit the live URL.", repo,
+                        "Step 3 ✗ Netlify site was not ready for %s: %s",
+                        repo,
+                        deployment_error,
                     )
             except Exception as exc:
                 deployment_error = f"Netlify site creation failed: {exc}"
