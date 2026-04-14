@@ -186,7 +186,21 @@ def _dedupe_keep_order(items: list[str]) -> list[str]:
 
 def _is_max_token_failure(ticket: Ticket) -> bool:
     msg = (ticket.error_msg or "").lower()
-    return "max_tokens" in msg or ("truncated" in msg and "token" in msg)
+    if not msg:
+        return False
+
+    explicit_markers = (
+        "max_tokens",
+        "max token",
+        "token limit",
+        "maximum token",
+        "maximum output",
+        "output token",
+    )
+    if any(marker in msg for marker in explicit_markers):
+        return True
+
+    return "truncat" in msg and "token" in msg
 
 
 def _split_attempt_from_labels(labels: list[str] | None) -> int:

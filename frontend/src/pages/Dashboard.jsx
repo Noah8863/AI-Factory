@@ -805,7 +805,10 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <Navbar />
+      <Navbar
+        interactionLocked={uiLockedByTasking}
+        lockReason={navLockedHint}
+      />
 
       {/* ── Confirmation modal ─────────────────────────────────── */}
       {deleteConfirm && (

@@ -161,6 +161,26 @@ export default function ChatThread({
   const hasAnyTickets = agentTickets.length > 0
   const allTicketsDone = hasAnyTickets && agentTickets.every((ticket) => ticket.status === 'done')
   const hasSuccessfulDeployment = !!deploymentLiveUrl || deploymentStatus === 'deployed'
+  const jiraErrorForSummary = taskingResult?.jira_error || null
+  const jiraKeysFromTasking = Array.isArray(taskingResult?.jira_tickets_created)
+    ? taskingResult.jira_tickets_created
+        .map((ticket) => ticket?.key)
+        .filter(Boolean)
+    : []
+  const jiraKeysFromAgentTickets = Array.from(new Set(
+    agentTickets
+      .map((ticket) => ticket?.jira_issue_key)
+      .filter(Boolean)
+  ))
+  const jiraKeysForSummary = jiraKeysFromTasking.length > 0
+    ? jiraKeysFromTasking
+    : jiraKeysFromAgentTickets
+  const hasTaskingSummary = !isTaskingLoading && (
+    !!taskingResult ||
+    !!repoUrl ||
+    !!jiraErrorForSummary ||
+    jiraKeysForSummary.length > 0
+  )
 
   let deployControlMode = 'hidden'
   let deployControlDisabled = false
@@ -564,30 +584,36 @@ export default function ChatThread({
       )}
 
       {/* ── Post-tasking summary + actions ─────────────────────── */}
-      {taskingResult && !isTaskingLoading && (
+      {hasTaskingSummary && (
         <div className="chat-tasking-banner chat-tasking-banner--decision">
           <div className="chat-tasking-banner__decision-body">
             <span className="material-icons chat-tasking-banner__decision-icon">
-              {taskingResult?.jira_error ? 'warning' : 'check_circle'}
+              {jiraErrorForSummary ? 'warning' : 'check_circle'}
             </span>
             <div>
               {repoUrl && (
                 <p className="chat-tasking-banner__sub">
                   <span className="material-icons" style={{ fontSize: '0.9rem', verticalAlign: 'middle', marginRight: 4 }}>code</span>
-                  <a href={repoUrl} target="_blank" rel="noreferrer" className="chat-tasking-banner__repo-link">
-                    {repoUrl.replace('https://github.com/', '')}
+                  <a
+                    href={repoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="chat-tasking-banner__repo-link"
+                    title={repoUrl}
+                  >
+                    Project being developed here
                   </a>
                 </p>
               )}
-              {taskingResult?.jira_error ? (
+              {jiraErrorForSummary ? (
                 <p className="chat-tasking-banner__sub chat-tasking-banner__sub--warn">
-                  Jira sync failed: {taskingResult.jira_error}
+                  Jira sync failed: {jiraErrorForSummary}
                 </p>
-              ) : taskingResult?.jira_tickets_created?.length > 0 ? (
+              ) : jiraKeysForSummary.length > 0 ? (
                 <p className="chat-tasking-banner__sub">
-                  {taskingResult.jira_tickets_created.length} ticket{taskingResult.jira_tickets_created.length !== 1 ? 's' : ''} synced to Jira
+                  {jiraKeysForSummary.length} ticket{jiraKeysForSummary.length !== 1 ? 's' : ''} synced to Jira
                   &nbsp;·&nbsp;
-                  {taskingResult.jira_tickets_created.map(t => t.key).join(' · ')}
+                  {jiraKeysForSummary.join(' · ')}
                 </p>
               ) : null}
             </div>
@@ -650,7 +676,7 @@ export default function ChatThread({
       )}
 
       {/* ── Done: Add requirements ─────────────────────────────── */}
-      {isDone && !taskingResult && (
+      {isDone && !hasTaskingSummary && (
         <div className="chat-thread__add-more">
           <button
             className="chat-thread__add-more-btn"

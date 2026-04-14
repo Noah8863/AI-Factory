@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import './Navbar.scss'
 
-export default function Navbar() {
+export default function Navbar({
+  interactionLocked = false,
+  lockReason = 'Please wait while Jira tickets are being created.',
+}) {
   const navigate = useNavigate()
   const location = useLocation()
   const isLoggedIn = !!localStorage.getItem('aif_user')
@@ -10,7 +13,14 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
+  useEffect(() => {
+    if (!interactionLocked) return
+    setMenuOpen(false)
+    setShowLogoutConfirm(false)
+  }, [interactionLocked])
+
   const openLogoutConfirm = () => {
+    if (interactionLocked) return
     setShowLogoutConfirm(true)
     setMenuOpen(false)
   }
@@ -22,6 +32,14 @@ export default function Navbar() {
   }
 
   const close = () => setMenuOpen(false)
+
+  const handleLockedNavClick = (event) => {
+    if (!interactionLocked) {
+      close()
+      return
+    }
+    event.preventDefault()
+  }
 
   return (
     <nav className="navbar">
@@ -38,8 +56,21 @@ export default function Navbar() {
               {!isDashboard && (
                 <Link to="/dashboard" className="navbar__link">Dashboard</Link>
               )}
-              <Link to="/profile" className="navbar__link">Profile</Link>
-              <button onClick={openLogoutConfirm} className="navbar__logout">
+              <Link
+                to="/profile"
+                className={`navbar__link ${interactionLocked ? 'navbar__link--disabled' : ''}`}
+                onClick={handleLockedNavClick}
+                aria-disabled={interactionLocked}
+                title={interactionLocked ? lockReason : undefined}
+              >
+                Profile
+              </Link>
+              <button
+                onClick={openLogoutConfirm}
+                className="navbar__logout"
+                disabled={interactionLocked}
+                title={interactionLocked ? lockReason : undefined}
+              >
                 <span className="material-icons">logout</span>
                 Logout
               </button>
@@ -60,6 +91,8 @@ export default function Navbar() {
           className={`navbar__hamburger ${menuOpen ? 'navbar__hamburger--open' : ''}`}
           onClick={() => setMenuOpen((o) => !o)}
           aria-label="Toggle menu"
+          disabled={interactionLocked && isLoggedIn}
+          title={interactionLocked && isLoggedIn ? lockReason : undefined}
         >
           <span /><span /><span />
         </button>
@@ -76,13 +109,21 @@ export default function Navbar() {
                   Dashboard
                 </Link>
               )}
-              <Link to="/profile" className="navbar__drawer-link" onClick={close}>
+              <Link
+                to="/profile"
+                className={`navbar__drawer-link ${interactionLocked ? 'navbar__drawer-link--disabled' : ''}`}
+                onClick={handleLockedNavClick}
+                aria-disabled={interactionLocked}
+                title={interactionLocked ? lockReason : undefined}
+              >
                 <span className="material-icons">person</span>
                 Profile
               </Link>
               <button
                 className="navbar__drawer-link navbar__drawer-link--danger"
                 onClick={openLogoutConfirm}
+                disabled={interactionLocked}
+                title={interactionLocked ? lockReason : undefined}
               >
                 <span className="material-icons">logout</span>
                 Logout
