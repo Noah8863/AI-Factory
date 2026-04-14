@@ -1145,6 +1145,7 @@ export default function Dashboard() {
             repoUrl={conversation.github_repo_url ?? null}
             deploymentStatus={conversation.deployment_status ?? 'not_deployed'}
             deploymentLiveUrl={conversation.deployment_live_url ?? null}
+            deploymentError={conversation.deployment_error ?? null}
             devInProcess={devInProcess}
             isDeployActionLoading={isDeployActionLoading}
             agentRunError={agentRunError}

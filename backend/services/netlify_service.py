@@ -52,6 +52,19 @@ def _auth_token() -> str:
     return os.getenv("NETLIFY_AUTH_TOKEN", "")
 
 
+def _account_slug() -> str:
+    """
+    Target Netlify account slug for site creation.
+
+    Preferred env var is NETLIFY_ACCOUNT_SLUG.
+    NETLIFY_TEAM_ID is kept as a backward-compatible alias.
+    """
+    return (
+        os.getenv("NETLIFY_ACCOUNT_SLUG", "").strip()
+        or os.getenv("NETLIFY_TEAM_ID", "").strip()
+    )
+
+
 def _api_base() -> str:
     return os.getenv("NETLIFY_API_BASE_URL", "https://api.netlify.com/api/v1").rstrip("/")
 
@@ -69,28 +82,43 @@ def _find_existing_site_for_repo(repo_full_name: str, site_name: str | None = No
 
     This prevents repeated /sites create failures for repos that are already connected.
     """
-    url = f"{_api_base()}/sites"
-    try:
-        resp = requests.get(url, headers=_headers(), timeout=30)
-    except requests.RequestException as exc:
-        logger.warning("Failed to query Netlify sites list: %s", exc)
-        return None
+    # First try account-scoped listing when configured, then fall back to global.
+    account_slug = _account_slug()
+    urls = []
+    if account_slug:
+        urls.append(f"{_api_base()}/{account_slug}/sites")
+    urls.append(f"{_api_base()}/sites")
 
-    if resp.status_code != 200:
-        logger.warning(
-            "Failed to list Netlify sites (HTTP %s): %s",
-            resp.status_code,
-            resp.text[:240],
-        )
-        return None
+    sites: list[dict] = []
+    fetched_any = False
+    for url in urls:
+        try:
+            resp = requests.get(url, headers=_headers(), timeout=30)
+        except requests.RequestException as exc:
+            logger.warning("Failed to query Netlify sites list at %s: %s", url, exc)
+            continue
 
-    try:
-        sites = resp.json()
-    except ValueError:
-        logger.warning("Netlify sites list returned non-JSON response.")
-        return None
+        if resp.status_code != 200:
+            logger.warning(
+                "Failed to list Netlify sites at %s (HTTP %s): %s",
+                url,
+                resp.status_code,
+                resp.text[:240],
+            )
+            continue
 
-    if not isinstance(sites, list):
+        try:
+            data = resp.json()
+        except ValueError:
+            logger.warning("Netlify sites list returned non-JSON response at %s.", url)
+            continue
+
+        if isinstance(data, list):
+            sites = data
+            fetched_any = True
+            break
+
+    if not fetched_any:
         return None
 
     target_repo = repo_full_name.strip().lower()
@@ -212,7 +240,7 @@ def create_netlify_site(
     if existing:
         return existing
 
-    team_id = os.getenv("NETLIFY_TEAM_ID", "")
+    account_slug = _account_slug()
 
     payload: dict = {
         "name": site_name,
@@ -224,13 +252,17 @@ def create_netlify_site(
             "dir":      "dist",
         },
     }
-    if team_id:
-        payload["account_slug"] = team_id
 
-    url = f"{_api_base()}/sites"
+    # Account-specific endpoint guarantees the site appears in the intended team.
+    # If no slug is configured, default to the token owner's personal scope.
+    url = (
+        f"{_api_base()}/{account_slug}/sites"
+        if account_slug
+        else f"{_api_base()}/sites"
+    )
     logger.info(
-        "Creating Netlify site '%s' linked to %s (team=%s) …",
-        site_name, repo_full_name, team_id or "personal",
+        "Creating Netlify site '%s' linked to %s (account=%s) …",
+        site_name, repo_full_name, account_slug or "personal",
     )
 
     try:

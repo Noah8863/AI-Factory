@@ -109,6 +109,7 @@ export default function ChatThread({
   repoUrl,
   deploymentStatus,
   deploymentLiveUrl,
+  deploymentError,
   devInProcess,
   isDeployActionLoading,
   agentRunError,
@@ -462,6 +463,14 @@ export default function ChatThread({
         <div className="dev-banner dev-banner--error">
           <span className="material-icons">error</span>
           <p className="dev-banner__text">{agentRunError}</p>
+        </div>
+      )}
+
+      {/* ── Deployment error banner ────────────────────────────── */}
+      {deploymentStatus === 'failed' && deploymentError && (
+        <div className="dev-banner dev-banner--error">
+          <span className="material-icons">cloud_off</span>
+          <p className="dev-banner__text">Deployment failed: {deploymentError}</p>
         </div>
       )}
 
