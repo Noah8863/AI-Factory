@@ -1023,10 +1023,19 @@ async def run_all_tickets(
     # ── Post-completion: Netlify deployment + README ─────────────────────────────
     made_ticket_progress = (done_count + fail_count) > 0
 
+    should_attempt_auto_post_completion = (
+        all_done
+        and conversation.deployment_status in (None, "", "not_deployed", "failed")
+    )
+
     should_run_post_completion = (
         conversation.github_repo_name
         and (all_done or allow_incomplete_deploy)
-        and (force_post_completion or made_ticket_progress)
+        and (
+            force_post_completion
+            or made_ticket_progress
+            or should_attempt_auto_post_completion
+        )
     )
 
     if should_run_post_completion:

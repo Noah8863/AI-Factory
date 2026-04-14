@@ -40,7 +40,7 @@ import os
 from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 _BACKEND_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(_BACKEND_ENV_PATH)
@@ -49,7 +49,35 @@ logger = logging.getLogger(__name__)
 
 
 def _auth_token() -> str:
-    return os.getenv("NETLIFY_AUTH_TOKEN", "")
+    # Prefer runtime environment variables, then fall back to backend/.env values.
+    # This makes token resolution robust for long-running processes where .env
+    # values may be added after initial import.
+    candidates = [
+        os.getenv("NETLIFY_AUTH_TOKEN", ""),
+        os.getenv("NETLIFY_TOKEN", ""),
+        os.getenv("NETLIFY_ACCESS_TOKEN", ""),
+    ]
+
+    for value in candidates:
+        token = (value or "").strip()
+        if token:
+            return token
+
+    if _BACKEND_ENV_PATH.exists():
+        try:
+            file_env = dotenv_values(_BACKEND_ENV_PATH)
+        except Exception as exc:
+            logger.warning("Failed to parse backend env file at %s: %s", _BACKEND_ENV_PATH, exc)
+            file_env = {}
+
+        for key in ("NETLIFY_AUTH_TOKEN", "NETLIFY_TOKEN", "NETLIFY_ACCESS_TOKEN"):
+            token = (file_env.get(key) or "").strip()
+            if token:
+                # Cache for subsequent calls in this process.
+                os.environ.setdefault("NETLIFY_AUTH_TOKEN", token)
+                return token
+
+    return ""
 
 
 def _account_slug() -> str:
@@ -229,8 +257,9 @@ def create_netlify_site(
     token = _auth_token()
     if not token:
         message = (
-            "NETLIFY_AUTH_TOKEN is not set — skipping Netlify site creation for "
-            f"'{site_name}'."
+            "NETLIFY auth token is missing. Checked NETLIFY_AUTH_TOKEN, "
+            "NETLIFY_TOKEN, NETLIFY_ACCESS_TOKEN, and backend/.env. "
+            f"Skipping Netlify site creation for '{site_name}'."
         )
         logger.error(message)
         return {"error": message}
