@@ -38,6 +38,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   // Integration statuses
   const [jiraStatus, setJiraStatus] = useState('loading')  // 'loading' | 'connected' | 'disconnected'
@@ -138,8 +139,13 @@ export default function Profile() {
   }
 
   const handleLogout = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const confirmLogout = () => {
     localStorage.removeItem('aif_user')
     navigate('/')
+    setShowLogoutConfirm(false)
   }
 
   return (
@@ -157,6 +163,28 @@ export default function Profile() {
       </div>
 
       <Navbar />
+
+      {showLogoutConfirm && (
+        <div className="confirm-overlay" onClick={() => setShowLogoutConfirm(false)}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal__icon">
+              <span className="material-icons">logout</span>
+            </div>
+            <h2 className="confirm-modal__title">Log out of AI Factory?</h2>
+            <p className="confirm-modal__body">
+              You will be signed out from this session and returned to the home page.
+            </p>
+            <div className="confirm-modal__actions">
+              <button className="confirm-modal__cancel" onClick={() => setShowLogoutConfirm(false)}>
+                Cancel
+              </button>
+              <button className="confirm-modal__confirm" onClick={confirmLogout}>
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="profile-page__body">
         <div className="profile-wrap">

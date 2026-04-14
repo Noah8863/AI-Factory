@@ -67,7 +67,7 @@ export const sendMessage = (conversationId, content) =>
 export const startTasking = (conversationId) =>
   api.post(`/conversations/${conversationId}/start-tasking`)
 
-/** Reopen a tasking/done conversation for additional requirements (Yes / Add more). */
+/** Reopen a tasking/done conversation for additional requirements. */
 export const reopenConversation = (conversationId) =>
   api.post(`/conversations/${conversationId}/reopen`)
 

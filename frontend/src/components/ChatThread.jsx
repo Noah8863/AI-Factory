@@ -70,18 +70,18 @@ function TypingIndicator() {
 }
 
 const PROJECT_TYPE_LABELS = [
-  { key: 'is_mobile_app',       label: 'Mobile App',     icon: 'smartphone' },
-  { key: 'is_devops_program',   label: 'DevOps',         icon: 'build' },
-  { key: 'is_script',           label: 'Script / CLI',   icon: 'terminal' },
-  { key: 'is_full_stack',       label: 'Full-Stack',     icon: 'layers' },
-  { key: 'has_frontend',        label: 'Frontend',       icon: 'web' },
-  { key: 'has_backend',         label: 'Backend API',    icon: 'dns' },
+  { key: 'is_mobile_app',       label: 'Mobile App',     icon: 'smartphone', color: 'violet' },
+  { key: 'is_devops_program',   label: 'DevOps',         icon: 'build',      color: 'amber' },
+  { key: 'is_script',           label: 'Script / CLI',   icon: 'terminal',   color: 'emerald' },
+  { key: 'is_full_stack',       label: 'Full-Stack',     icon: 'layers',     color: 'indigo' },
+  { key: 'has_frontend',        label: 'Frontend',       icon: 'web',        color: 'rose' },
+  { key: 'has_backend',         label: 'Backend API',    icon: 'dns',        color: 'sky' },
 ]
 
 function getProjectTypeLabel(tags) {
   if (!tags) return null
-  for (const { key, label, icon } of PROJECT_TYPE_LABELS) {
-    if (tags[key]) return { label, icon }
+  for (const { key, label, icon, color } of PROJECT_TYPE_LABELS) {
+    if (tags[key]) return { label, icon, color }
   }
   return null
 }
@@ -117,9 +117,8 @@ export default function ChatThread({
   onSendMessage,
   onContinueChat,
   onStartTasking,
-  onYesContinue,
-  onNoClose,
   onAddMoreRequirements,
+  onReportBug,
   onRetryTicket,
   onRefreshTickets,
   onDeployIdea,
@@ -426,7 +425,7 @@ export default function ChatThread({
             onRedeploy={onRedeployIdea}
           />
           {projectTypeLabel && (
-            <div className="chat-thread__header-badge">
+            <div className={`chat-thread__header-badge chat-thread__header-badge--project chat-thread__header-badge--${projectTypeLabel.color}`}>
               <span className="material-icons">{projectTypeLabel.icon}</span>
               {projectTypeLabel.label}
             </div>
@@ -555,8 +554,8 @@ export default function ChatThread({
         </div>
       )}
 
-      {/* ── Post-tasking: Yes / No ─────────────────────────────── */}
-      {isTasking && !isTaskingLoading && (
+      {/* ── Post-tasking summary + actions ─────────────────────── */}
+      {taskingResult && !isTaskingLoading && (
         <div className="chat-tasking-banner chat-tasking-banner--decision">
           <div className="chat-tasking-banner__decision-body">
             <span className="material-icons chat-tasking-banner__decision-icon">
@@ -584,23 +583,20 @@ export default function ChatThread({
               ) : null}
             </div>
           </div>
-          <p className="chat-tasking-banner__prompt">
-            Would you like to continue defining the scope?
-          </p>
-          <div className="chat-ready-banner__actions">
+          <div className="chat-tasking-banner__actions">
             <button
-              className="chat-ready-banner__btn chat-ready-banner__btn--ghost"
-              onClick={onNoClose}
+              className="chat-thread__add-more-btn"
+              onClick={onAddMoreRequirements}
             >
-              <span className="material-icons">close</span>
-              No
+              <span className="material-icons">add_circle_outline</span>
+              Add Requirements
             </button>
             <button
-              className="chat-ready-banner__btn chat-ready-banner__btn--primary"
-              onClick={onYesContinue}
+              className="chat-thread__add-more-btn chat-thread__add-more-btn--ghost"
+              onClick={onReportBug}
             >
-              Yes
-              <span className="material-icons">arrow_forward</span>
+              <span className="material-icons">bug_report</span>
+              Report Bug
             </button>
           </div>
         </div>
@@ -645,7 +641,7 @@ export default function ChatThread({
       )}
 
       {/* ── Done: Add requirements ─────────────────────────────── */}
-      {isDone && (
+      {isDone && !taskingResult && (
         <div className="chat-thread__add-more">
           <button
             className="chat-thread__add-more-btn"
@@ -653,6 +649,13 @@ export default function ChatThread({
           >
             <span className="material-icons">add_circle_outline</span>
             Add Requirements
+          </button>
+          <button
+            className="chat-thread__add-more-btn chat-thread__add-more-btn--ghost"
+            onClick={onReportBug}
+          >
+            <span className="material-icons">bug_report</span>
+            Report Bug
           </button>
         </div>
       )}

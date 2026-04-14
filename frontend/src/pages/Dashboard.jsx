@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, declineTasking, getAgentTickets, getIdeaTickets, retryTicket, cancelAgents, deployIdea } from '../utils/api'
+import api, { getIdeas, startConversation, sendMessage, startTasking, getIdeaConversation, deleteIdea, reopenConversation, getAgentTickets, getIdeaTickets, retryTicket, cancelAgents, deployIdea } from '../utils/api'
 import ChatThread from '../components/ChatThread'
 import DevProgress from '../components/DevProgress'
 import Navbar from '../components/Navbar'
@@ -189,6 +189,7 @@ export default function Dashboard() {
   const [deleteConfirm, setDeleteConfirm] = useState(null)   // idea pending deletion
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [jiraStatus, setJiraStatus] = useState('loading')
   const [jiraProjectSelected, setJiraProjectSelected] = useState(true) // assume true until checked
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false)
@@ -692,42 +693,7 @@ export default function Dashboard() {
     }
   }
 
-  // ── Post-tasking: user clicked "Yes, keep defining scope" ────
-  const handleYesContinue = async () => {
-    if (!conversation) return
-    try {
-      const res = await reopenConversation(conversation.id)
-      const { conversation: conv, messages: msgs } = res.data
-      setConversation(normalizeConversation(conv))
-      setMessages(msgs)
-      setTaskingResult(null)
-      setShowReadyBanner(false)
-      setDevInProcess(false)
-      setAgentRunError('')
-      setAgentTickets([])
-    } catch {
-      setSendError('Failed to reopen conversation. Please try again.')
-    }
-  }
-
-  // ── Post-tasking: user clicked "No" ─────────────────────────
-  const handleNoClose = async () => {
-    if (!conversation) return
-    try {
-      const res = await declineTasking(conversation.id)
-      const { conversation: conv, messages: msgs } = res.data
-      const normalizedConv = normalizeConversation(conv)
-      setConversation(normalizedConv)
-      setMessages(msgs)
-      // Agents are already running — fetch tickets so the progress panel populates
-      setDevInProcess(true)
-      fetchTickets(normalizedConv.id)
-    } catch {
-      setSendError('Something went wrong. Please try again.')
-    }
-  }
-
-  // ── "Add more requirements" — same as Yes ───────────────────
+  // ── Add more requirements ─────────────────────────────────────
   const handleAddMoreRequirements = async () => {
     if (!conversation) return
     try {
@@ -745,7 +711,14 @@ export default function Dashboard() {
     }
   }
 
+  // Placeholder for future bug-report workflow.
+  const handleReportBug = () => {}
+
   const handleLogout = () => {
+    setShowLogoutConfirm(true)
+  }
+
+  const confirmLogout = () => {
     localStorage.removeItem('aif_user')
     localStorage.removeItem(DRAFT_KEY)
     navigate('/')
@@ -755,6 +728,8 @@ export default function Dashboard() {
   const charColor = charCount > MAX_CHARS * 0.9 ? 'rose' : charCount > MAX_CHARS * 0.7 ? 'amber' : 'default'
   const activeChatAvailable = ideas.length > 0 || !!conversation
   const activeChatDisabled = !activeChatAvailable || !!openingIdeaId
+  const uiLockedByTasking = isTaskingLoading
+  const navLockedHint = 'Please wait while Jira tickets are being created.'
   const activeChatTitle = ideas.length > 0
     ? 'Open most recent idea chat'
     : conversation
@@ -763,10 +738,7 @@ export default function Dashboard() {
   const isDecisionMode =
     activeNav === 'chat' &&
     !!conversation &&
-    (
-      showReadyBanner ||
-      (conversation.status === 'tasking' && !isTaskingLoading)
-    )
+    showReadyBanner
 
   const effectiveMobileOffset = (activeNav === 'chat' && !isKeyboardOpen && !isDecisionMode)
     ? mobileTabsHeight
@@ -829,20 +801,50 @@ export default function Dashboard() {
         </div>
       )}
 
+      {showLogoutConfirm && (
+        <div className="confirm-overlay" onClick={() => setShowLogoutConfirm(false)}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal__icon">
+              <span className="material-icons">logout</span>
+            </div>
+            <h2 className="confirm-modal__title">Log out of AI Factory?</h2>
+            <p className="confirm-modal__body">
+              You will be signed out from this session and returned to the home page.
+            </p>
+            <div className="confirm-modal__actions">
+              <button
+                className="confirm-modal__cancel"
+                onClick={() => setShowLogoutConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="confirm-modal__confirm"
+                onClick={confirmLogout}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Mobile bottom tab bar ──────────────────────────────── */}
       <nav className="bottom-tabs">
         <button
           className={`bottom-tabs__item ${activeNav === 'new' ? 'bottom-tabs__item--active' : ''}`}
           onClick={() => setActiveNav('new')}
+          disabled={uiLockedByTasking}
+          title={uiLockedByTasking ? navLockedHint : undefined}
         >
           <span className="material-icons">add_circle</span>
           New
         </button>
         <button
-          className={`bottom-tabs__item ${activeNav === 'chat' ? 'bottom-tabs__item--active' : ''} ${activeChatDisabled ? 'bottom-tabs__item--disabled' : ''}`}
+          className={`bottom-tabs__item ${activeNav === 'chat' ? 'bottom-tabs__item--active' : ''} ${activeChatDisabled || uiLockedByTasking ? 'bottom-tabs__item--disabled' : ''}`}
           onClick={handleOpenActiveChat}
-          disabled={activeChatDisabled}
-          title={activeChatTitle}
+          disabled={activeChatDisabled || uiLockedByTasking}
+          title={uiLockedByTasking ? navLockedHint : activeChatTitle}
         >
           <span className="material-icons">forum</span>
           Active
@@ -850,15 +852,32 @@ export default function Dashboard() {
         <button
           className={`bottom-tabs__item ${activeNav === 'history' ? 'bottom-tabs__item--active' : ''}`}
           onClick={() => setActiveNav('history')}
+          disabled={uiLockedByTasking}
+          title={uiLockedByTasking ? navLockedHint : undefined}
         >
           <span className="material-icons">history</span>
           Ideas
         </button>
-        <Link to="/profile" className="bottom-tabs__item">
+        <Link
+          to="/profile"
+          className={`bottom-tabs__item ${uiLockedByTasking ? 'bottom-tabs__item--disabled' : ''}`}
+          onClick={(event) => {
+            if (uiLockedByTasking) {
+              event.preventDefault()
+            }
+          }}
+          aria-disabled={uiLockedByTasking}
+          title={uiLockedByTasking ? navLockedHint : undefined}
+        >
           <span className="material-icons">person</span>
           Profile
         </Link>
-        <button className="bottom-tabs__item bottom-tabs__item--danger" onClick={handleLogout}>
+        <button
+          className="bottom-tabs__item bottom-tabs__item--danger"
+          onClick={handleLogout}
+          disabled={uiLockedByTasking}
+          title={uiLockedByTasking ? navLockedHint : undefined}
+        >
           <span className="material-icons">logout</span>
           Logout
         </button>
@@ -870,16 +889,18 @@ export default function Dashboard() {
           <button
             className={`sidebar__item ${activeNav === 'new' ? 'sidebar__item--active' : ''}`}
             onClick={() => setActiveNav('new')}
+            disabled={uiLockedByTasking}
+            title={uiLockedByTasking ? navLockedHint : undefined}
           >
             <span className="material-icons">add_circle</span>
             New Idea
           </button>
 
           <button
-            className={`sidebar__item ${activeNav === 'chat' ? 'sidebar__item--active' : ''} ${activeChatDisabled ? 'sidebar__item--disabled' : ''}`}
+            className={`sidebar__item ${activeNav === 'chat' ? 'sidebar__item--active' : ''} ${activeChatDisabled || uiLockedByTasking ? 'sidebar__item--disabled' : ''}`}
             onClick={handleOpenActiveChat}
-            disabled={activeChatDisabled}
-            title={activeChatTitle}
+            disabled={activeChatDisabled || uiLockedByTasking}
+            title={uiLockedByTasking ? navLockedHint : activeChatTitle}
           >
             <span className="material-icons">forum</span>
             Active Chat
@@ -894,6 +915,8 @@ export default function Dashboard() {
           <button
             className={`sidebar__item ${activeNav === 'history' ? 'sidebar__item--active' : ''}`}
             onClick={() => setActiveNav('history')}
+            disabled={uiLockedByTasking}
+            title={uiLockedByTasking ? navLockedHint : undefined}
           >
             <span className="material-icons">history</span>
             My Ideas
@@ -904,7 +927,17 @@ export default function Dashboard() {
         </nav>
 
         <div className="sidebar__footer">
-          <Link to="/profile" className="sidebar__user sidebar__user--link">
+          <Link
+            to="/profile"
+            className={`sidebar__user sidebar__user--link ${uiLockedByTasking ? 'sidebar__user--disabled' : ''}`}
+            onClick={(event) => {
+              if (uiLockedByTasking) {
+                event.preventDefault()
+              }
+            }}
+            aria-disabled={uiLockedByTasking}
+            title={uiLockedByTasking ? navLockedHint : undefined}
+          >
             <div className="sidebar__avatar">
               {avatar
                 ? <img src={avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
@@ -913,7 +946,12 @@ export default function Dashboard() {
             </div>
             <span className="sidebar__username">{user?.display_name || user?.username}</span>
           </Link>
-          <button className="sidebar__logout" onClick={handleLogout} title="Logout">
+          <button
+            className="sidebar__logout"
+            onClick={handleLogout}
+            title={uiLockedByTasking ? navLockedHint : 'Logout'}
+            disabled={uiLockedByTasking}
+          >
             <span className="material-icons">logout</span>
           </button>
         </div>
@@ -1076,9 +1114,8 @@ export default function Dashboard() {
             onSendMessage={handleSendMessage}
             onContinueChat={handleContinueChat}
             onStartTasking={handleStartTasking}
-            onYesContinue={handleYesContinue}
-            onNoClose={handleNoClose}
             onAddMoreRequirements={handleAddMoreRequirements}
+            onReportBug={handleReportBug}
             onRetryTicket={handleRetryTicket}
             onRefreshTickets={handleRefreshTickets}
             onDeployIdea={() => handleDeployIdea('deploy')}

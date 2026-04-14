@@ -220,6 +220,12 @@
 
       &:hover { background: $bg-hover; }
     }
+
+    &--disabled {
+      opacity: 0.5;
+      pointer-events: none;
+      cursor: not-allowed;
+    }
   }
 
   &__avatar {
@@ -379,7 +385,8 @@
     }
 
     .chat-thread {
-      width: min(100%, 1240px);
+      width: 100%;
+      max-width: none;
       margin-inline: auto;
 
       @media (max-width: 640px) {

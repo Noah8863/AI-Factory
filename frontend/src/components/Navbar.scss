@@ -191,4 +191,112 @@
 
     &:hover { box-shadow: 0 0 36px rgba($indigo, 0.45); }
   }
+
+  &__confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 210;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  &__confirm-modal {
+    width: 100%;
+    max-width: 410px;
+    background: $bg-surface;
+    border: 1px solid $border-default;
+    border-radius: $radius-xl;
+    padding: 24px;
+    box-shadow: 0 22px 56px rgba(0, 0, 0, 0.55);
+    animation: fadeUp 0.2s $ease-out both;
+
+    @media (max-width: 480px) {
+      padding: 20px 16px;
+      border-radius: $radius-lg;
+    }
+  }
+
+  &__confirm-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: $radius-md;
+    background: rgba($rose, 0.1);
+    border: 1px solid rgba($rose, 0.28);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+
+    .material-icons {
+      font-size: 21px;
+      color: $rose;
+    }
+  }
+
+  &__confirm-title {
+    margin: 0 0 8px;
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: $text-primary;
+  }
+
+  &__confirm-text {
+    margin: 0;
+    font-size: 0.875rem;
+    color: $text-secondary;
+    line-height: 1.6;
+  }
+
+  &__confirm-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+
+    @media (max-width: 480px) {
+      flex-direction: column-reverse;
+    }
+  }
+
+  &__confirm-cancel,
+  &__confirm-logout {
+    padding: 9px 20px;
+    border-radius: $radius-full;
+    font-size: 0.875rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: $transition;
+
+    @media (max-width: 480px) {
+      width: 100%;
+    }
+  }
+
+  &__confirm-cancel {
+    background: transparent;
+    border: 1px solid $border-default;
+    color: $text-secondary;
+
+    &:hover {
+      background: $bg-elevated;
+      color: $text-primary;
+    }
+  }
+
+  &__confirm-logout {
+    background: rgba($rose, 0.1);
+    border: 1px solid rgba($rose, 0.32);
+    color: $rose;
+    font-weight: 600;
+
+    &:hover {
+      background: rgba($rose, 0.2);
+      border-color: rgba($rose, 0.52);
+    }
+  }
 }

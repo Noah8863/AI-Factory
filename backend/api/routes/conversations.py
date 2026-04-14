@@ -32,7 +32,8 @@ logger = logging.getLogger(__name__)
 # ── Post-tasking agent messages (stored in DB, shown in chat) ────────────────
 TASKING_COMPLETE_AGENT_MESSAGE = (
     "Jira tickets have been made! I'll start tasking out these requirements to an "
-    "AI agent. Would you like to continue defining the scope?"
+    "AI agent. You can continue refining the scope anytime with the Add Requirements "
+    "button."
 )
 TASKING_DECLINED_AGENT_MESSAGE = (
     "Sounds good! If you need any additional requirements handled, come back and "
@@ -475,7 +476,10 @@ async def start_tasking(
         content=TASKING_COMPLETE_AGENT_MESSAGE,
     ))
 
-    # status was already set to "tasking" at the top of this function
+    # Task generation is complete; default to done so Add Requirements is available
+    # immediately without the old Yes/No decision step.
+    conversation.status = "done"
+
     db.commit()
     db.refresh(conversation)
 
@@ -511,7 +515,7 @@ def reopen_conversation(
     """
     Transitions a 'tasking' or 'done' conversation back to 'active' so the user
     can continue chatting with the PM agent to define additional requirements.
-    Called when the user clicks "Yes" or "Add more requirements".
+    Called when the user clicks "Add Requirements".
     """
     conversation = _get_owned_conversation(conversation_id, current_user.id, db)
     if conversation.status not in ("tasking", "done"):
