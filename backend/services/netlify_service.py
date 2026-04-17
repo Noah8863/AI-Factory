@@ -49,7 +49,8 @@ load_dotenv(_BACKEND_ENV_PATH)
 logger = logging.getLogger(__name__)
 
 _FRONTEND_BUILD_COMMAND = "npm --prefix frontend install && npm --prefix frontend run build"
-_FRONTEND_PUBLISH_DIR = "frontend/dist"
+_FRONTEND_PUBLISH_DIR   = "frontend/dist"
+_VANILLA_PUBLISH_DIR    = "frontend"
 
 
 def _auth_token() -> str:
@@ -108,7 +109,8 @@ def _headers() -> dict:
     }
 
 
-def _desired_build_settings(repo_full_name: str) -> dict:
+def _desired_build_settings(repo_full_name: str, is_npm: bool = True) -> dict:
+    repo_name = repo_full_name.split("/")[-1] if "/" in repo_full_name else repo_full_name
     return {
         "provider": "github",
         "repo_url": f"https://github.com/{repo_full_name}",
@@ -116,12 +118,12 @@ def _desired_build_settings(repo_full_name: str) -> dict:
         "repo_branch": "main",
         "allowed_branches": ["main"],
         "public_repo": True,
-        "cmd": _FRONTEND_BUILD_COMMAND,
-        "dir": _FRONTEND_PUBLISH_DIR,
+        "cmd": _FRONTEND_BUILD_COMMAND if is_npm else "",
+        "dir": _FRONTEND_PUBLISH_DIR if is_npm else _VANILLA_PUBLISH_DIR,
     }
 
 
-def _ensure_site_build_settings(site_id: str, repo_full_name: str) -> bool:
+def _ensure_site_build_settings(site_id: str, repo_full_name: str, is_npm: bool = True) -> bool:
     """
     Force site build settings to match this codebase structure.
 
@@ -131,7 +133,7 @@ def _ensure_site_build_settings(site_id: str, repo_full_name: str) -> bool:
         return False
 
     url = f"{_api_base()}/sites/{site_id}"
-    payload = {"build_settings": _desired_build_settings(repo_full_name)}
+    payload = {"build_settings": _desired_build_settings(repo_full_name, is_npm=is_npm)}
 
     try:
         resp = requests.patch(url, json=payload, headers=_headers(), timeout=30)
@@ -230,32 +232,56 @@ def _find_existing_site_for_repo(repo_full_name: str, site_name: str | None = No
 
 # ── netlify.toml ──────────────────────────────────────────────────────────────
 
+def _repo_has_package_json(repo_name: str) -> bool:
+    """Return True if frontend/package.json exists in the repo (npm-based project)."""
+    from services.github_service import read_file_from_repo
+    try:
+        content = read_file_from_repo(repo_name, "frontend/package.json")
+        return content is not None
+    except Exception:
+        return False
+
+
 def write_netlify_toml(repo_name: str, backend_url: str | None = None) -> bool:
     """
     Commit a netlify.toml to the root of the generated GitHub repo.
 
-    The toml sets the Vite build command/publish dir and adds a server-side
-    /api/* proxy rule pointing at the generated project's Railway backend URL.
-    The server-side rewrite (status=200, force=true) means the browser never
-    makes a cross-origin request — no CORS issues.
+    Automatically detects whether the project is npm-based (has frontend/package.json)
+    or vanilla HTML/CSS/JS (no package.json):
 
-    MUST be called before create_netlify_site so Netlify uses this config
-    on its first build.
+    - npm project  → build command + frontend/dist publish dir
+    - vanilla JS   → no build command, publish frontend/ directly
+
+    Optionally adds a server-side /api/* proxy to the Railway backend URL.
+    MUST be called before create_netlify_site.
 
     Args:
         repo_name:   Short GitHub repo name (e.g. "my-recipe-app").
-        backend_url: The generated project's Railway HTTPS URL
-                     (from infrastructure/railway_client.create_production_service).
+        backend_url: The generated project's Railway HTTPS URL (optional).
 
     Returns True on success, False on failure.
     """
     from services.github_service import write_file_to_repo
 
-    toml = (
-        "[build]\n"
-        f'  command = "{_FRONTEND_BUILD_COMMAND}"\n'
-        f'  publish = "{_FRONTEND_PUBLISH_DIR}"\n'
+    is_npm = _repo_has_package_json(repo_name)
+    logger.info(
+        "netlify.toml for %s: detected %s project.",
+        repo_name,
+        "npm/framework" if is_npm else "vanilla HTML/CSS/JS",
     )
+
+    if is_npm:
+        toml = (
+            "[build]\n"
+            f'  command = "{_FRONTEND_BUILD_COMMAND}"\n'
+            f'  publish = "{_FRONTEND_PUBLISH_DIR}"\n'
+        )
+    else:
+        # Vanilla HTML/CSS/JS — no build step, serve files directly.
+        toml = (
+            "[build]\n"
+            f'  publish = "{_VANILLA_PUBLISH_DIR}"\n'
+        )
 
     if backend_url:
         clean_backend = backend_url.rstrip("/")
@@ -324,13 +350,19 @@ def create_netlify_site(
         logger.error(message)
         return {"error": message}
 
+    # Detect project type once — used for build settings throughout.
+    repo_name = repo_full_name.split("/")[-1] if "/" in repo_full_name else repo_full_name
+    is_npm = _repo_has_package_json(repo_name)
+
     # Fast path: if this repo is already linked, reuse the existing site.
     existing = _find_existing_site_for_repo(repo_full_name, site_name)
     if existing:
-        _ensure_site_build_settings(existing.get("site_id", ""), repo_full_name)
+        _ensure_site_build_settings(existing.get("site_id", ""), repo_full_name, is_npm=is_npm)
         return existing
 
     account_slug = _account_slug()
+    build_cmd = _FRONTEND_BUILD_COMMAND if is_npm else ""
+    publish_dir = _FRONTEND_PUBLISH_DIR if is_npm else _VANILLA_PUBLISH_DIR
 
     payload: dict = {
         "name": site_name,
@@ -338,11 +370,11 @@ def create_netlify_site(
             "provider": "github",
             "repo":     repo_full_name,
             "branch":   "main",
-            "cmd":      _FRONTEND_BUILD_COMMAND,
-            "dir":      _FRONTEND_PUBLISH_DIR,
+            "cmd":      build_cmd,
+            "dir":      publish_dir,
             "public_repo": True,
         },
-        "build_settings": _desired_build_settings(repo_full_name),
+        "build_settings": _desired_build_settings(repo_full_name, is_npm=is_npm),
     }
 
     # Account-specific endpoint guarantees the site appears in the intended team.
@@ -366,7 +398,7 @@ def create_netlify_site(
 
     if resp.status_code in (200, 201):
         parsed = _parse_site_response(resp.json(), repo_full_name)
-        _ensure_site_build_settings(parsed.get("site_id", ""), repo_full_name)
+        _ensure_site_build_settings(parsed.get("site_id", ""), repo_full_name, is_npm=is_npm)
         return parsed
 
     # 422 = subdomain already taken — retry without a name so Netlify auto-assigns
@@ -385,13 +417,12 @@ def create_netlify_site(
 
         if retry.status_code in (200, 201):
             parsed = _parse_site_response(retry.json(), repo_full_name)
-            _ensure_site_build_settings(parsed.get("site_id", ""), repo_full_name)
+            _ensure_site_build_settings(parsed.get("site_id", ""), repo_full_name, is_npm=is_npm)
             return parsed
 
-        # Repo may already be linked to a site despite 422 on create.
         existing_after_retry = _find_existing_site_for_repo(repo_full_name, site_name)
         if existing_after_retry:
-            _ensure_site_build_settings(existing_after_retry.get("site_id", ""), repo_full_name)
+            _ensure_site_build_settings(existing_after_retry.get("site_id", ""), repo_full_name, is_npm=is_npm)
             return existing_after_retry
 
         message = (
@@ -404,7 +435,7 @@ def create_netlify_site(
     # Last chance: check whether a linked site already exists for this repo.
     existing_after_failure = _find_existing_site_for_repo(repo_full_name, site_name)
     if existing_after_failure:
-        _ensure_site_build_settings(existing_after_failure.get("site_id", ""), repo_full_name)
+        _ensure_site_build_settings(existing_after_failure.get("site_id", ""), repo_full_name, is_npm=is_npm)
         return existing_after_failure
 
     message = (
