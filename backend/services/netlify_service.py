@@ -123,11 +123,41 @@ def _desired_build_settings(repo_full_name: str, is_npm: bool = True) -> dict:
     }
 
 
+def _trigger_site_build(site_id: str) -> bool:
+    """
+    Kick off a fresh Netlify build for a site.
+
+    Called after settings are patched so the new build uses the updated config
+    (correct build_settings, public_repo=True) instead of any stale cached config
+    from when the site was first linked.
+    """
+    if not site_id:
+        return False
+    url = f"{_api_base()}/sites/{site_id}/builds"
+    try:
+        resp = requests.post(url, headers=_headers(), timeout=30)
+    except requests.RequestException as exc:
+        logger.warning("Failed to trigger Netlify build for site %s: %s", site_id, exc)
+        return False
+    if resp.status_code in (200, 201):
+        logger.info("Triggered fresh Netlify build for site %s.", site_id)
+        return True
+    logger.warning(
+        "Could not trigger Netlify build for site %s (HTTP %s): %s",
+        site_id,
+        resp.status_code,
+        resp.text[:200],
+    )
+    return False
+
+
 def _ensure_site_build_settings(site_id: str, repo_full_name: str, is_npm: bool = True) -> bool:
     """
     Force site build settings to match this codebase structure.
 
     Generated repos keep web code in /frontend, so Netlify must build from there.
+    After a successful PATCH, triggers a fresh build so the updated settings
+    (including public_repo=True) take effect before Netlify's auto-triggered build.
     """
     if not site_id:
         return False
@@ -159,6 +189,9 @@ def _ensure_site_build_settings(site_id: str, repo_full_name: str, is_npm: bool 
             _FRONTEND_BUILD_COMMAND,
             _FRONTEND_PUBLISH_DIR,
         )
+        # Trigger a new build so our patched settings are used, not the stale
+        # settings from the initial site-creation auto-deploy.
+        _trigger_site_build(site_id)
         return True
 
     logger.warning(

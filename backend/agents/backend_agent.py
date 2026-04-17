@@ -22,9 +22,25 @@ Respond with a SINGLE JSON object and nothing else — no preamble, no explanati
       "action": "create"
     }}
   ],
+  "api_endpoints": [
+    {{
+      "method": "POST",
+      "path": "/api/auth/login",
+      "description": "Authenticate user, return JWT",
+      "request_body": {{"email": "string", "password": "string"}},
+      "response": {{"token": "string", "user": {{}}}}
+    }}
+  ],
   "notes": "any important env vars, migration steps, or caveats (optional)"
 }}
 ```
+
+## API Contract — REQUIRED
+The `api_endpoints` array MUST be populated for every backend ticket that creates or modifies routes.
+- List every HTTP endpoint this ticket introduces or changes.
+- `path` MUST be the FULL path a client calls — combine `app.use('/prefix', router)` + route handler path.
+  Example: `app.use('/api/recipes', router)` + `router.get('/:id')` → path is `/api/recipes/:id`
+- Never omit `api_endpoints` if any routes were written. An empty array is only valid if this ticket writes zero routes.
 
 ## Rules
 - `path` is always relative to the repository root — e.g. `backend/models/user.js`, NOT `/backend/...`

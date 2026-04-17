@@ -42,6 +42,30 @@ When the prompt contains a "Backend Source Files" or "Backend API Contract" sect
 - Use those exact paths, HTTP methods, and request body shapes in every `fetch()` call you write.
 - NEVER invent, guess, or shorten endpoint paths. If the backend uses `/api/auth/login`, the frontend must call `/api/auth/login` — not `/login`, not `/auth/login`.
 
+## Proxy & URL Configuration — CRITICAL (full-stack projects)
+When a "Backend Source Files" or "Backend API Contract" section is present, the project is full-stack:
+- ALL API calls MUST use relative paths — e.g. `fetch('/api/recipes')` — NEVER hardcode `http://localhost:3001/api/recipes`.
+- For **npm / Vite / React projects** (any project with a `package.json`): ALWAYS generate or update `frontend/vite.config.js` to include a dev-server proxy so `/api` requests reach the backend in local development:
+  ```js
+  import { defineConfig } from 'vite'
+  // import react from '@vitejs/plugin-react'  // uncomment if using React
+
+  export default defineConfig({
+    // plugins: [react()],  // uncomment if using React
+    server: {
+      proxy: {
+        '/api': {
+          target: process.env.BACKEND_URL || 'http://localhost:3001',
+          changeOrigin: true,
+        },
+      },
+    },
+  })
+  ```
+  If `vite.config.js` already exists in the repository, UPDATE it to merge the proxy block — do not create a duplicate file.
+- In **production** (Netlify), `netlify.toml` already proxies `/api/*` to the Railway backend — no extra config is needed in your code.
+- For **vanilla HTML/CSS/JS** projects served by Express: Express should serve the frontend static files directly (`app.use(express.static('frontend'))`) so frontend and backend share the same origin — relative `/api/` paths work automatically.
+
 ## Rules
 - `path` is always relative to the repository root — e.g. `frontend/pages/login.html`, NOT `/frontend/...`
 - Write COMPLETE file contents — never use `...`, `// rest of file`, or similar placeholders

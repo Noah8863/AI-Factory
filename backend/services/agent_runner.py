@@ -907,25 +907,54 @@ async def run_ticket(
     backend_api_contract_block = ""
     frontend_source_block = ""
     if effective_ticket_type == "frontend":
-        # Fetch actual committed backend source files — gives the frontend agent full
-        # route prefixes (e.g. app.use('/api', router)) and request/response shapes.
-        source_context = await _fetch_backend_source_context(repo_name, existing_repo_files)
-        # Also build the compact regex-extracted route list from stored agent output.
-        route_contract = _build_backend_api_contract(conversation.id, db)
+        # Primary: read _api_contract.md committed by the backend phase.
+        # This is the most reliable source — the LLM that wrote the routes described them.
+        committed_contract: str = ""
+        if repo_name and "_api_contract.md" in existing_repo_files:
+            try:
+                from services.github_service import read_file_from_repo
 
-        if source_context:
-            backend_api_contract_block = source_context
-            if route_contract:
-                backend_api_contract_block += route_contract
-        elif route_contract:
-            backend_api_contract_block = route_contract
+                raw_contract = await asyncio.to_thread(
+                    read_file_from_repo, repo_name, "_api_contract.md"
+                )
+                if raw_contract and raw_contract.strip():
+                    committed_contract = (
+                        "## Backend API Contract (authoritative — from _api_contract.md)\n\n"
+                        "These are the EXACT endpoints implemented by the backend. "
+                        "Use them verbatim for all fetch() calls — no guessing, no shortcuts.\n\n"
+                        f"{raw_contract.strip()}\n\n"
+                    )
+                    logger.info(
+                        "Frontend ticket %s: loaded _api_contract.md (%d chars).",
+                        ticket.ticket_id,
+                        len(raw_contract),
+                    )
+            except Exception as exc:
+                logger.debug(
+                    "Could not read _api_contract.md for ticket %s: %s",
+                    ticket.ticket_id, exc,
+                )
+
+        if committed_contract:
+            backend_api_contract_block = committed_contract
         else:
-            backend_api_contract_block = (
-                "## Backend API Contract (from completed backend tickets)\n\n"
-                "No completed backend API routes were detected yet. If this ticket needs API "
-                "integration, reuse existing backend paths from repository files and avoid "
-                "inventing new endpoint names.\n\n"
-            )
+            # Fallback: fetch actual committed backend source files + regex extraction.
+            source_context = await _fetch_backend_source_context(repo_name, existing_repo_files)
+            route_contract = _build_backend_api_contract(conversation.id, db)
+
+            if source_context:
+                backend_api_contract_block = source_context
+                if route_contract:
+                    backend_api_contract_block += route_contract
+            elif route_contract:
+                backend_api_contract_block = route_contract
+            else:
+                backend_api_contract_block = (
+                    "## Backend API Contract (from completed backend tickets)\n\n"
+                    "No completed backend API routes were detected yet. If this ticket needs API "
+                    "integration, reuse existing backend paths from repository files and avoid "
+                    "inventing new endpoint names.\n\n"
+                )
 
         # Fetch already-committed frontend files so the agent sees existing nav/layout
         # structure and extends it rather than ignoring or duplicating it.
@@ -1074,6 +1103,130 @@ async def run_ticket(
         return False
 
 
+# ── API contract ─────────────────────────────────────────────────────────────
+
+async def _write_api_contract(conversation_id: int, repo_name: str, db: Session) -> bool:
+    """
+    After all backend tickets are done, collect `api_endpoints` arrays from each
+    ticket's agent_output and commit `_api_contract.md` to the repo.
+
+    This file becomes the authoritative API reference for all subsequent frontend
+    tickets — more reliable than regex extraction because the LLM that wrote the
+    routes also described them in structured form.
+
+    Returns True if the file was written successfully, False otherwise.
+    """
+    if not repo_name:
+        return False
+
+    backend_done = (
+        db.query(Ticket)
+        .filter(
+            Ticket.conversation_id == conversation_id,
+            Ticket.type == "backend",
+            Ticket.status == "done",
+        )
+        .order_by(Ticket.sequence.asc().nullslast(), Ticket.id.asc())
+        .all()
+    )
+    if not backend_done:
+        return False
+
+    all_endpoints: list[dict] = []
+    for ticket in backend_done:
+        if not ticket.agent_output:
+            continue
+        try:
+            payload = json.loads(ticket.agent_output)
+        except Exception:
+            continue
+        endpoints = payload.get("api_endpoints") or []
+        if isinstance(endpoints, list):
+            all_endpoints.extend(e for e in endpoints if isinstance(e, dict))
+
+    if not all_endpoints:
+        logger.info(
+            "No api_endpoints found in backend ticket outputs for conversation %s — "
+            "skipping _api_contract.md.",
+            conversation_id,
+        )
+        return False
+
+    lines = [
+        "# Backend API Contract",
+        "",
+        "This file was generated automatically by AI Factory after the backend phase completed.",
+        "**Frontend agents MUST use these exact paths, methods, and payload shapes.**",
+        "Do not invent or guess endpoint paths — use only what is listed here.",
+        "",
+        "## Endpoint Summary",
+        "",
+        "| Method | Path | Description |",
+        "| ------ | ---- | ----------- |",
+    ]
+    for ep in all_endpoints:
+        method = (ep.get("method") or "GET").upper()
+        path   = ep.get("path", "?")
+        desc   = ep.get("description", "")
+        lines.append(f"| `{method}` | `{path}` | {desc} |")
+
+    lines += ["", "## Endpoint Details", ""]
+    for ep in all_endpoints:
+        method  = (ep.get("method") or "GET").upper()
+        path    = ep.get("path", "?")
+        desc    = ep.get("description", "")
+        req_body = ep.get("request_body")
+        response = ep.get("response")
+        lines.append(f"### `{method} {path}`")
+        if desc:
+            lines.append(f"{desc}")
+            lines.append("")
+        if req_body:
+            lines.append("**Request body:**")
+            lines.append("```json")
+            try:
+                lines.append(json.dumps(req_body, indent=2))
+            except Exception:
+                lines.append(str(req_body))
+            lines.append("```")
+            lines.append("")
+        if response:
+            lines.append("**Response:**")
+            lines.append("```json")
+            try:
+                lines.append(json.dumps(response, indent=2))
+            except Exception:
+                lines.append(str(response))
+            lines.append("```")
+            lines.append("")
+
+    content = "\n".join(lines)
+
+    try:
+        from services.github_service import write_file_to_repo
+
+        ok = await asyncio.to_thread(
+            write_file_to_repo,
+            repo_name,
+            "_api_contract.md",
+            content,
+            "main",
+            "[skip ci] AI Factory: backend API contract for frontend agents",
+        )
+        if ok:
+            logger.info(
+                "Committed _api_contract.md to %s (%d endpoint(s)).",
+                repo_name,
+                len(all_endpoints),
+            )
+        else:
+            logger.warning("Failed to write _api_contract.md to %s.", repo_name)
+        return ok
+    except Exception as exc:
+        logger.warning("Error writing _api_contract.md for %s: %s", repo_name, exc)
+        return False
+
+
 # ── Full pipeline ─────────────────────────────────────────────────────────────
 
 async def run_all_tickets(
@@ -1165,19 +1318,54 @@ async def run_all_tickets(
             break
 
         project_tags = conversation.project_tags or {}
-        prefer_backend_first = bool(
+        is_full_stack_project = bool(
             project_tags.get("has_frontend", False)
             and project_tags.get("has_backend", False)
         )
-        if prefer_backend_first:
-            runnable_backend = [t for t in runnable if t.type == "backend"]
-            if runnable_backend:
-                logger.info(
-                    "Backend-first handoff enabled for conversation %s; prioritizing backend wave: %s",
-                    conversation_id,
-                    [t.ticket_id for t in runnable_backend],
-                )
-                runnable = runnable_backend
+
+        # Hard phase gate: for full-stack projects, hold all frontend tickets until
+        # every backend ticket has reached a terminal state (done/failed/cancelled).
+        # This guarantees _api_contract.md is committed before any frontend agent runs.
+        if is_full_stack_project:
+            all_conv_tickets_now = (
+                db.query(Ticket)
+                .filter(Ticket.conversation_id == conversation_id)
+                .all()
+            )
+            backend_terminal = all(
+                t.status in ("done", "failed", "cancelled")
+                for t in all_conv_tickets_now
+                if t.type == "backend"
+            )
+            if not backend_terminal:
+                # Only run backend tickets this wave.
+                runnable_backend = [t for t in runnable if t.type == "backend"]
+                if runnable_backend:
+                    logger.info(
+                        "Phase gate: holding frontend tickets until all backend tickets are terminal. "
+                        "Backend wave for conversation %s: %s",
+                        conversation_id,
+                        [t.ticket_id for t in runnable_backend],
+                    )
+                    runnable = runnable_backend
+                else:
+                    # No backend tickets are runnable but backend is not yet terminal —
+                    # some are still in_progress. Break and let the next round pick them up.
+                    logger.info(
+                        "Phase gate: no backend tickets runnable for conversation %s — "
+                        "waiting for in-progress backend tickets to complete.",
+                        conversation_id,
+                    )
+                    break
+            else:
+                # Backend phase is complete. Write the API contract once if not yet done.
+                repo_name_now = conversation.github_repo_name or ""
+                if repo_name_now:
+                    contract_committed = getattr(conversation, "_contract_committed", False)
+                    if not contract_committed:
+                        await _write_api_contract(conversation_id, repo_name_now, db)
+                        # Mark on the in-memory object so we don't re-commit each wave.
+                        conversation._contract_committed = True  # type: ignore[attr-defined]
 
         # All tickets at the lowest sequence share a "ready" wave and can
         # run concurrently.  Tickets without a sequence are treated as last.
@@ -1348,6 +1536,11 @@ async def run_all_tickets(
                 logger.info(
                     "Step 1 ✓ Railway backend live for %s → %s", repo, backend_url,
                 )
+                # Persist so re-deploys can reuse the same URL without re-querying Railway.
+                if backend_url:
+                    conversation.backend_service_url = backend_url
+                    conversation.updated_at = datetime.utcnow()
+                    db.commit()
             except RailwayConflictError as exc:
                 logger.error(
                     "Railway service name '%s' already exists in the Production Hub. "
@@ -1383,7 +1576,13 @@ async def run_all_tickets(
             try:
                 from services.netlify_service import write_netlify_toml
 
-                proxy_url = backend_url if (is_full_stack and backend_url) else None
+                # Use the freshly-obtained Railway URL; fall back to the URL persisted
+                # from a prior successful Railway deployment on the same conversation.
+                effective_backend_url = (
+                    backend_url
+                    or (conversation.backend_service_url if is_full_stack else None)
+                )
+                proxy_url = effective_backend_url if (is_full_stack and effective_backend_url) else None
                 ok = write_netlify_toml(repo_name=repo, backend_url=proxy_url)
                 if ok:
                     if proxy_url:

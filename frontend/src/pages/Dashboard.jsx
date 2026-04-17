@@ -89,7 +89,7 @@ function parseJiraStatusPayload(payload) {
 function getIdeaPill(idea, ideaTicketsMap) {
   const data = ideaTicketsMap[idea.id]
   if (!data || data.tickets.length === 0) {
-    return { label: 'Requirements in Need', icon: null, color: 'rose' }
+    return { label: 'Requirements Needed', icon: null, color: 'rose' }
   }
   const hasCancelled = data.tickets.some(t => t.status === 'cancelled')
   if (hasCancelled) {
