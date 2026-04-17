@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, Column, Integer, JSON, String, DateTime, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, JSON, String, Text, DateTime, ForeignKey
 from db.database import Base
 
 
@@ -13,6 +13,10 @@ class Conversation(Base):
     status = Column(String(32), default="active", nullable=False)
     # Set to True to signal any running background agent task to stop
     cancelled = Column(Boolean, default=False, nullable=False)
+    # Shared architectural blueprint generated before agents run.
+    # Injected into every developer agent prompt so both BE and FE share the same
+    # mental model of pages, endpoints, data models, and integration contract.
+    project_blueprint = Column(Text, nullable=True)
     # Project type tags set by the PM agent at ticket-generation time.
     # Stored as an object keyed by the canonical tag names.
     project_tags = Column(JSON, default=dict, nullable=True)

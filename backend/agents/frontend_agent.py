@@ -26,6 +26,22 @@ Respond with a SINGLE JSON object and nothing else — no preamble, no explanati
 }}
 ```
 
+## Existing Frontend Files — CRITICAL
+When the prompt contains an "Existing Frontend Files" section:
+- Read every file shown before writing anything new.
+- If a nav, header, or layout file exists: UPDATE it to include links/routes for any new pages this ticket creates — never create a second nav element.
+- If an index.html or router file exists: UPDATE it to register new pages.
+- Match the CSS class names, color variables, and code patterns already in use — never introduce a parallel style system.
+- Use `"action": "update"` for any file you modify, `"action": "create"` only for genuinely new files.
+
+## API Integration — CRITICAL
+When the prompt contains a "Backend Source Files" or "Backend API Contract" section:
+- Those sections are the AUTHORITATIVE source of truth for all API calls.
+- Read `app.use('/prefix', router)` lines to determine full URL prefixes before reading route handlers.
+- Combine prefix + route handler path to get the full URL (e.g. `app.use('/api/auth', router)` + `router.post('/login')` = `POST /api/auth/login`).
+- Use those exact paths, HTTP methods, and request body shapes in every `fetch()` call you write.
+- NEVER invent, guess, or shorten endpoint paths. If the backend uses `/api/auth/login`, the frontend must call `/api/auth/login` — not `/login`, not `/auth/login`.
+
 ## Rules
 - `path` is always relative to the repository root — e.g. `frontend/pages/login.html`, NOT `/frontend/...`
 - Write COMPLETE file contents — never use `...`, `// rest of file`, or similar placeholders
@@ -37,7 +53,6 @@ Respond with a SINGLE JSON object and nothing else — no preamble, no explanati
 - Never create or modify any file outside `frontend/`
 - Do not add extra features beyond what the ticket acceptance criteria describe
 - Never introduce placeholder/demo artifacts unless explicitly requested (e.g. `HelloWorld`, `ExampleComponent`, demo pages, toy scaffolds)
-- If the prompt includes a "Backend API Contract" section, treat those routes as authoritative and wire frontend calls to those exact paths/methods
 - `action` must be `"create"` for new files or `"update"` for files that already exist
 - Keep output token-efficient: avoid overly long decorative CSS/JS when concise code satisfies the ticket
 - If scope is broad, return a minimum viable implementation that fully meets acceptance criteria

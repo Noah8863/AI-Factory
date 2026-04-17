@@ -236,6 +236,31 @@ def list_repo_files(repo_name: str, branch: str = "main", max_files: int = 500) 
     return files
 
 
+def read_file_from_repo(repo_name: str, file_path: str, branch: str = "main") -> str | None:
+    """
+    Fetch the decoded text content of a single file from a GitHub repo via the Contents API.
+    Returns the file content as a string, or None on failure (404, binary, decode error, etc.).
+    """
+    token = os.getenv("GITHUB_TOKEN")
+    org_name = os.getenv("GITHUB_ORG", "AI-Factory-Repos")
+    url = f"https://api.github.com/repos/{org_name}/{repo_name}/contents/{file_path}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    resp = requests.get(url, headers=headers, params={"ref": branch})
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    encoded = data.get("content", "")
+    if not encoded:
+        return None
+    try:
+        return base64.b64decode(encoded).decode("utf-8")
+    except Exception:
+        return None
+
+
 def deploy_agent_work(repo_name: str, branch_name: str, commit_message: str):
     # 1. Ensure the repo exists in the Org
     if not create_org_repo(repo_name):

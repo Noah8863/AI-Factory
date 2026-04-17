@@ -366,6 +366,155 @@ def _build_backend_api_contract(conversation_id: int, db: Session, max_routes: i
     )
 
 
+_BACKEND_ENTRY_NAMES = frozenset({"app", "server", "main", "index"})
+_BACKEND_ROUTE_KEYWORDS = ("route", "router", "controller", "handler", "api", "auth", "endpoint")
+
+
+def _backend_file_priority(path: str) -> int:
+    stem = path.lower().rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    if stem in _BACKEND_ENTRY_NAMES:
+        return 0
+    if any(kw in path.lower() for kw in _BACKEND_ROUTE_KEYWORDS):
+        return 1
+    return 2
+
+
+async def _fetch_backend_source_context(
+    repo_name: str,
+    existing_repo_files: list[str],
+    max_files: int = 6,
+    max_lines_per_file: int = 150,
+) -> str:
+    """
+    Fetch the content of key backend files already committed to GitHub and return
+    a formatted context block for inclusion in frontend agent prompts.
+
+    Giving the frontend agent actual source code means it sees full route prefixes
+    (e.g. app.use('/api', router)) and request/response shapes, not just filenames.
+    """
+    if not repo_name or not existing_repo_files:
+        return ""
+
+    backend_files = [
+        f for f in existing_repo_files
+        if f.startswith("backend/")
+        and not f.endswith((".md", ".json", ".lock", ".env", ".yaml", ".yml", ".txt"))
+    ]
+    if not backend_files:
+        return ""
+
+    selected = sorted(backend_files, key=_backend_file_priority)[:max_files]
+
+    from services.github_service import read_file_from_repo
+
+    sections: list[str] = []
+    for file_path in selected:
+        try:
+            content = await asyncio.to_thread(read_file_from_repo, repo_name, file_path)
+            if not content or not content.strip():
+                continue
+            lines = content.splitlines()
+            truncated = len(lines) > max_lines_per_file
+            if truncated:
+                lines = lines[:max_lines_per_file]
+            body = "\n".join(lines)
+            if truncated:
+                body += f"\n... (truncated — {len(content.splitlines()) - max_lines_per_file} more lines)"
+            sections.append(f"### `{file_path}`\n```\n{body}\n```")
+        except Exception as exc:
+            logger.debug("Could not fetch backend file %s for frontend context: %s", file_path, exc)
+
+    if not sections:
+        return ""
+
+    joined = "\n\n".join(sections)
+    return (
+        "## Backend Source Files (actual committed code)\n\n"
+        "These files are already live in the repository. "
+        "You MUST use the exact routes, URL prefixes, and request/response shapes shown here "
+        "for all frontend API calls. Never invent or guess endpoint paths — "
+        "read `app.use(...)` calls to determine full prefixes, then read the route handlers "
+        "for method + path details.\n\n"
+        f"{joined}\n\n"
+    )
+
+
+_FRONTEND_ENTRY_NAMES = frozenset({"index", "app", "main", "router"})
+_FRONTEND_LAYOUT_KEYWORDS = ("nav", "navbar", "header", "footer", "layout", "sidebar", "menu", "shell")
+
+
+def _frontend_file_priority(path: str) -> int:
+    filename = path.lower().rsplit("/", 1)[-1]
+    stem = filename.rsplit(".", 1)[0]
+    if stem in _FRONTEND_ENTRY_NAMES:
+        return 0
+    if any(kw in path.lower() for kw in _FRONTEND_LAYOUT_KEYWORDS):
+        return 1
+    return 2
+
+
+async def _fetch_frontend_source_context(
+    repo_name: str,
+    existing_repo_files: list[str],
+    max_files: int = 8,
+    max_lines_per_file: int = 150,
+) -> str:
+    """
+    Fetch the content of already-committed frontend files and return a formatted
+    context block for later frontend ticket prompts.
+
+    This prevents frontend agents from ignoring files created by earlier tickets —
+    e.g. a ticket that builds a navbar will see its own HTML so subsequent tickets
+    can add links to it rather than creating duplicate nav elements.
+    """
+    if not repo_name or not existing_repo_files:
+        return ""
+
+    frontend_files = [
+        f for f in existing_repo_files
+        if f.startswith("frontend/")
+        and not f.endswith((".md", ".json", ".lock", ".env"))
+    ]
+    if not frontend_files:
+        return ""
+
+    selected = sorted(frontend_files, key=_frontend_file_priority)[:max_files]
+
+    from services.github_service import read_file_from_repo
+
+    sections: list[str] = []
+    for file_path in selected:
+        try:
+            content = await asyncio.to_thread(read_file_from_repo, repo_name, file_path)
+            if not content or not content.strip():
+                continue
+            lines = content.splitlines()
+            truncated = len(lines) > max_lines_per_file
+            if truncated:
+                lines = lines[:max_lines_per_file]
+            body = "\n".join(lines)
+            if truncated:
+                body += f"\n... (truncated — {len(content.splitlines()) - max_lines_per_file} more lines)"
+            sections.append(f"### `{file_path}`\n```\n{body}\n```")
+        except Exception as exc:
+            logger.debug("Could not fetch frontend file %s for context: %s", file_path, exc)
+
+    if not sections:
+        return ""
+
+    joined = "\n\n".join(sections)
+    return (
+        "## Existing Frontend Files (already committed)\n\n"
+        "These files were written by earlier tickets and are already in the repository. "
+        "You MUST read them before writing any new files:\n"
+        "- If a nav/header/layout file exists, UPDATE it to add links for new pages — do not create a second nav.\n"
+        "- If an index.html or router exists, UPDATE it to register new pages/routes.\n"
+        "- Reuse shared CSS classes, variable names, and patterns already established.\n"
+        "- Never duplicate structure that already exists — extend it.\n\n"
+        f"{joined}\n\n"
+    )
+
+
 async def _auto_split_failed_ticket(
     conversation_id: int,
     ticket: Ticket,
@@ -756,15 +905,43 @@ async def run_ticket(
         )
 
     backend_api_contract_block = ""
+    frontend_source_block = ""
     if effective_ticket_type == "frontend":
-        backend_api_contract_block = _build_backend_api_contract(conversation.id, db)
-        if not backend_api_contract_block:
+        # Fetch actual committed backend source files — gives the frontend agent full
+        # route prefixes (e.g. app.use('/api', router)) and request/response shapes.
+        source_context = await _fetch_backend_source_context(repo_name, existing_repo_files)
+        # Also build the compact regex-extracted route list from stored agent output.
+        route_contract = _build_backend_api_contract(conversation.id, db)
+
+        if source_context:
+            backend_api_contract_block = source_context
+            if route_contract:
+                backend_api_contract_block += route_contract
+        elif route_contract:
+            backend_api_contract_block = route_contract
+        else:
             backend_api_contract_block = (
                 "## Backend API Contract (from completed backend tickets)\n\n"
                 "No completed backend API routes were detected yet. If this ticket needs API "
                 "integration, reuse existing backend paths from repository files and avoid "
                 "inventing new endpoint names.\n\n"
             )
+
+        # Fetch already-committed frontend files so the agent sees existing nav/layout
+        # structure and extends it rather than ignoring or duplicating it.
+        frontend_source_block = await _fetch_frontend_source_context(repo_name, existing_repo_files)
+
+    # Blueprint block — shared across all ticket types so BE and FE agents
+    # build toward the same pages, routes, data shapes, and integration contract.
+    blueprint_block = ""
+    if conversation.project_blueprint:
+        blueprint_block = (
+            "## Project Blueprint\n\n"
+            "This is the authoritative architectural plan for the entire project. "
+            "All agents implement against this shared contract — do not deviate from "
+            "the routes, pages, data models, or integration patterns defined here.\n\n"
+            f"{conversation.project_blueprint}\n\n"
+        )
 
     # Build a rich prompt from ticket metadata
     deps_str = ", ".join(ticket.depends_on) if ticket.depends_on else "none"
@@ -774,12 +951,14 @@ async def run_ticket(
         f"**Priority:** {ticket.priority or 'N/A'} | "
         f"**Sequence:** {ticket.sequence or 'N/A'} | "
         f"**Depends on:** {deps_str}\n\n"
+        f"{blueprint_block}"
         "## Implementation Guardrails\n\n"
         "- The ticket title is only a short label.\n"
         "- Acceptance Criteria below is the source of truth and must drive implementation details.\n"
         "- Do not generate placeholder/demo artifacts (for example HelloWorld, demo-only components, or toy scaffolds) unless explicitly required by the criteria.\n\n"
         "- For frontend tickets, follow the Backend API Contract routes exactly when provided.\n\n"
         f"{repo_files_block}"
+        f"{frontend_source_block}"
         f"{backend_api_contract_block}"
         f"## Acceptance Criteria\n\n{ticket.description}\n\n"
         f"## Target Repository\n`{repo_name}`\n"
@@ -918,6 +1097,55 @@ async def run_all_tickets(
     if not conversation:
         logger.error("run_all_tickets: conversation %s not found.", conversation_id)
         return {"error": "Conversation not found"}
+
+    # ── Generate project blueprint (once, before first ticket fires) ─────────
+    # The blueprint gives every agent a shared mental model: pages, endpoints,
+    # data models, and integration contract.  We generate it here rather than
+    # in start_tasking so it does not add latency to the HTTP response.
+    if not conversation.project_blueprint:
+        try:
+            from services.pm_agent import generate_project_blueprint
+
+            all_conv_tickets = (
+                db.query(Ticket)
+                .filter(Ticket.conversation_id == conversation_id)
+                .all()
+            )
+            tickets_for_blueprint = [
+                {
+                    "id": t.ticket_id,
+                    "type": t.type,
+                    "title": t.title,
+                    "description": t.description or "",
+                }
+                for t in all_conv_tickets
+            ]
+            project_name = (
+                (conversation.github_repo_name or "project")
+                .replace("-", " ")
+                .title()
+            )
+            blueprint = await asyncio.to_thread(
+                generate_project_blueprint,
+                {"tickets": tickets_for_blueprint},
+                conversation.project_tags or {},
+                project_name,
+            )
+            if blueprint:
+                conversation.project_blueprint = blueprint
+                conversation.updated_at = datetime.utcnow()
+                db.commit()
+                logger.info(
+                    "Project blueprint generated for conversation %s (%d chars).",
+                    conversation_id,
+                    len(blueprint),
+                )
+        except Exception as exc:
+            logger.warning(
+                "Blueprint generation failed for conversation %s — agents will proceed without it: %s",
+                conversation_id,
+                exc,
+            )
 
     done_count  = 0
     fail_count  = 0

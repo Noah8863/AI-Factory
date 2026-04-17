@@ -69,6 +69,9 @@ with engine.connect() as _conn:
         "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS pending_project_type VARCHAR(64)"
     ))
     _conn.execute(text(
+        "ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_blueprint TEXT"
+    ))
+    _conn.execute(text(
         "UPDATE conversations SET deployment_status = 'not_deployed' WHERE deployment_status IS NULL"
     ))
     _conn.commit()

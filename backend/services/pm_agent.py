@@ -573,6 +573,94 @@ async def run_tasking(
     }
 
 
+# ─── Project Blueprint generation ────────────────────────────────────────────
+
+_BLUEPRINT_SYSTEM_PROMPT = """
+You are the architect at AI Factory. Based on the Jira tickets provided, produce a
+concise Project Blueprint that will be injected into every developer agent prompt
+as shared context before any code is written.
+
+The blueprint gives both the backend and frontend agents a single source of truth so
+they build toward the same system — same routes, same data shapes, same integration contract.
+
+Include only the sections that apply to this project type:
+
+### Project Overview
+1-2 sentences describing what is being built and who it's for.
+
+### Frontend Pages
+(include only if the project has a frontend)
+One line per page:  `URL path` → `suggested file path` — description
+Example: `/login` → `frontend/pages/login.html` — User authentication form
+
+### Backend API Endpoints
+(include only if the project has a backend)
+One line per endpoint:  `METHOD /full/path` — description — request body / response shape
+Example: `POST /api/auth/login` — Authenticate user — body: { email, password } → { token, user }
+Always include the full path with any prefix (e.g. /api/) that the server mounts routes under.
+
+### Shared Data Models
+Key entities with their field names and types. Keep it brief.
+Example: **User**: { id: int, email: string, username: string, token: string }
+
+### Integration Contract
+How frontend and backend connect:
+- Auth header format (e.g. `Authorization: Bearer <token>`)
+- localStorage key where the token is stored
+- API base URL / prefix used in all fetch() calls
+- Standard fetch pattern snippet (3-4 lines max)
+
+Rules:
+- Be specific and grounded in the tickets. Do not add features not in the ticket list.
+- Use concrete paths, field names, and HTTP methods — not vague descriptions.
+- Keep each section brief. Bullet points and short lines only.
+- Output raw Markdown only — no preamble, no explanation outside the document.
+- Omit sections that do not apply (e.g. no Frontend Pages for a backend-only API).
+"""
+
+
+def generate_project_blueprint(
+    tickets_payload: dict,
+    project_tags: dict,
+    project_name: str = "Project",
+) -> str:
+    """
+    Generate a shared Project Blueprint from the PM's ticket plan.
+
+    Stored on the Conversation and injected into every developer agent prompt
+    so backend and frontend agents share the same mental model of pages,
+    endpoints, data shapes, and integration contract before writing a line of code.
+    """
+    tickets = tickets_payload.get("tickets", [])
+    if not tickets:
+        return ""
+
+    ticket_lines = []
+    for t in tickets:
+        ticket_lines.append(
+            f"[{t.get('id', '?')}] ({t.get('type', '?').upper()}) "
+            f"{t.get('title', '')} — {(t.get('description', '') or '')[:300]}"
+        )
+    tickets_block = "\n".join(ticket_lines)
+    active_tags = {k: v for k, v in (project_tags or {}).items() if v}
+    tags_line = ", ".join(active_tags.keys()) if active_tags else "unknown"
+
+    prompt = (
+        f"Project: {project_name}\n"
+        f"Project type: {tags_line}\n\n"
+        f"Tickets to be implemented:\n{tickets_block}\n\n"
+        "Generate the Project Blueprint now."
+    )
+
+    response = _client.messages.create(
+        model=_MODEL,
+        max_tokens=2048,
+        system=_BLUEPRINT_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return (response.content[0].text or "").strip()
+
+
 # ─── README generation ────────────────────────────────────────────────────────
 
 _README_SYSTEM_PROMPT = """
