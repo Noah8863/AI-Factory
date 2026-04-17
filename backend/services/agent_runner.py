@@ -1615,6 +1615,27 @@ async def run_all_tickets(
                 conversation.deployment_status = "deployed"
                 conversation.deployment_live_url = live_url
                 conversation.deployment_error = None
+
+                # Send deployment-success email to the project owner.
+                try:
+                    from models.user import User
+                    from services.email_service import send_deployment_success
+
+                    owner = db.get(User, user_id)
+                    if owner and owner.email:
+                        await asyncio.to_thread(
+                            send_deployment_success,
+                            owner.email,
+                            project_name,
+                            live_url,
+                            repo_github_url,
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "Deployment email failed for conversation %s: %s",
+                        conversation_id,
+                        exc,
+                    )
             else:
                 conversation.deployment_status = "failed"
                 conversation.deployment_error = (

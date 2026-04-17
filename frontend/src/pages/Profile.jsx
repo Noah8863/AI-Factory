@@ -40,6 +40,17 @@ export default function Profile() {
   const [saveError, setSaveError] = useState('')
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
+  // Change password
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showCurrentPw, setShowCurrentPw] = useState(false)
+  const [showNewPw, setShowNewPw] = useState(false)
+  const [showConfirmPw, setShowConfirmPw] = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwSuccess, setPwSuccess] = useState(false)
+  const [pwError, setPwError] = useState('')
+
   // Integration statuses
   const [jiraStatus, setJiraStatus] = useState('loading')  // 'loading' | 'connected' | 'disconnected'
 
@@ -120,6 +131,36 @@ export default function Profile() {
     setSaving(false)
     setSaveSuccess(true)
     setTimeout(() => setSaveSuccess(false), 3000)
+  }
+
+  const handleChangePassword = async () => {
+    setPwError('')
+    setPwSuccess(false)
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPwError('All fields are required.')
+      return
+    }
+    if (newPassword.length < 8) {
+      setPwError('New password must be at least 8 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('New passwords do not match.')
+      return
+    }
+    setPwSaving(true)
+    try {
+      await api.post('/auth/change-password', { current_password: currentPassword, new_password: newPassword })
+      setPwSuccess(true)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setTimeout(() => setPwSuccess(false), 4000)
+    } catch (err) {
+      setPwError(err?.response?.data?.detail || 'Failed to change password.')
+    } finally {
+      setPwSaving(false)
+    }
   }
 
   const handleConnectJira = () => {
@@ -303,6 +344,113 @@ export default function Profile() {
                   <><span className="material-icons">check_circle</span>Saved!</>
                 ) : (
                   <><span className="material-icons">save</span>Save Changes</>
+                )}
+              </button>
+            </div>
+          </section>
+
+          {/* ── Security ─────────────────────────────────────────── */}
+          <section className="profile-card">
+            <h2 className="profile-card__heading">
+              <span className="material-icons">lock</span>
+              Security
+            </h2>
+
+            <div className="profile-form">
+              <div className="profile-form__field">
+                <label className="profile-form__label" htmlFor="pf-cur-pw">Current Password</label>
+                <div className="profile-form__pw-row">
+                  <input
+                    id="pf-cur-pw"
+                    type={showCurrentPw ? 'text' : 'password'}
+                    className="profile-form__input"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className="profile-form__pw-toggle"
+                    onClick={() => setShowCurrentPw(v => !v)}
+                    aria-label={showCurrentPw ? 'Hide password' : 'Show password'}
+                  >
+                    <span className="material-icons">{showCurrentPw ? 'visibility_off' : 'visibility'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="profile-form__field">
+                <label className="profile-form__label" htmlFor="pf-new-pw">New Password</label>
+                <div className="profile-form__pw-row">
+                  <input
+                    id="pf-new-pw"
+                    type={showNewPw ? 'text' : 'password'}
+                    className="profile-form__input"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Min. 8 characters"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="profile-form__pw-toggle"
+                    onClick={() => setShowNewPw(v => !v)}
+                    aria-label={showNewPw ? 'Hide password' : 'Show password'}
+                  >
+                    <span className="material-icons">{showNewPw ? 'visibility_off' : 'visibility'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="profile-form__field">
+                <label className="profile-form__label" htmlFor="pf-confirm-pw">Confirm New Password</label>
+                <div className="profile-form__pw-row">
+                  <input
+                    id="pf-confirm-pw"
+                    type={showConfirmPw ? 'text' : 'password'}
+                    className="profile-form__input"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="profile-form__pw-toggle"
+                    onClick={() => setShowConfirmPw(v => !v)}
+                    aria-label={showConfirmPw ? 'Hide password' : 'Show password'}
+                  >
+                    <span className="material-icons">{showConfirmPw ? 'visibility_off' : 'visibility'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {pwError && (
+                <div className="profile-form__error">
+                  <span className="material-icons">warning</span>
+                  {pwError}
+                </div>
+              )}
+
+              {pwSuccess && (
+                <div className="profile-form__success">
+                  <span className="material-icons">check_circle</span>
+                  Password updated successfully.
+                </div>
+              )}
+
+              <button
+                className={`profile-form__save ${pwSuccess ? 'profile-form__save--success' : ''}`}
+                onClick={handleChangePassword}
+                disabled={pwSaving}
+              >
+                {pwSaving ? (
+                  <><span className="profile-form__spinner" />Updating…</>
+                ) : pwSuccess ? (
+                  <><span className="material-icons">check_circle</span>Updated!</>
+                ) : (
+                  <><span className="material-icons">lock_reset</span>Update Password</>
                 )}
               </button>
             </div>

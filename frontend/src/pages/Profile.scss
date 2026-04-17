@@ -547,6 +547,46 @@
     border-radius: $radius-full;
     animation: spin 0.7s linear infinite;
   }
+
+  &__pw-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    .profile-form__input { padding-right: 44px; }
+  }
+
+  &__pw-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: $text-tertiary;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s;
+
+    &:hover { color: $text-secondary; }
+    .material-icons { font-size: 18px; }
+  }
+
+  &__success {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 14px;
+    background: rgba($emerald, 0.08);
+    border: 1px solid rgba($emerald, 0.25);
+    border-radius: $radius-md;
+    color: $emerald;
+    font-size: 0.875rem;
+
+    .material-icons { font-size: 17px; }
+  }
 }
 
 // ── Integrations ──────────────────────────────────────────────────────────────

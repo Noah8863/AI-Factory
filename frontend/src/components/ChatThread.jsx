@@ -193,12 +193,20 @@ export default function ChatThread({
   let deployControlDisabledReason = ''
 
   if (hasFrontendCapability && repoUrl) {
-    if (isDeploying || (hasSuccessfulDeployment && devInProcess)) {
+    if (isDeploying) {
+      // Active deploy action or status === 'deploying'
       deployControlMode = 'deploying'
+    } else if (deploymentStatus === 'failed') {
+      // Deployment failed and not actively retrying
+      deployControlMode = 'failed'
     } else if (deploymentStatus === 'deployed' && !devInProcess) {
+      // Successfully deployed, agents idle — show success pill
       deployControlMode = 'deployed'
+    } else if (hasSuccessfulDeployment && devInProcess) {
+      // Already deployed but a new dev run is in progress
+      deployControlMode = 'deploying'
     } else if (!hasSuccessfulDeployment && devInProcess) {
-      // First build in progress and not yet deployed: hide deploy controls.
+      // First dev build still running, nothing deployed yet — hide
       deployControlMode = 'hidden'
     } else if (hasSuccessfulDeployment) {
       deployControlMode = 'redeploy'
@@ -463,6 +471,9 @@ export default function ChatThread({
             disabled={deployControlDisabled}
             disabledReason={deployControlDisabledReason}
             loading={!!isDeployActionLoading}
+            deploymentError={deploymentError || ''}
+            liveUrl={deploymentLiveUrl || ''}
+            repoUrl={repoUrl || ''}
             onDeploy={onDeployIdea}
             onRedeploy={onRedeployIdea}
           />
@@ -504,14 +515,6 @@ export default function ChatThread({
         <div className="dev-banner dev-banner--error">
           <span className="material-icons">error</span>
           <p className="dev-banner__text">{agentRunError}</p>
-        </div>
-      )}
-
-      {/* ── Deployment error banner ────────────────────────────── */}
-      {deploymentStatus === 'failed' && deploymentError && (
-        <div className="dev-banner dev-banner--error">
-          <span className="material-icons">cloud_off</span>
-          <p className="dev-banner__text">Deployment failed: {deploymentError}</p>
         </div>
       )}
 

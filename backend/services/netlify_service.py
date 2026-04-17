@@ -133,7 +133,17 @@ def _ensure_site_build_settings(site_id: str, repo_full_name: str, is_npm: bool 
         return False
 
     url = f"{_api_base()}/sites/{site_id}"
-    payload = {"build_settings": _desired_build_settings(repo_full_name, is_npm=is_npm)}
+    # Set public_repo in BOTH build_settings and the top-level repo object so
+    # Netlify's clone step uses anonymous HTTPS instead of SSH deploy keys.
+    payload = {
+        "build_settings": _desired_build_settings(repo_full_name, is_npm=is_npm),
+        "repo": {
+            "provider": "github",
+            "repo": repo_full_name,
+            "branch": "main",
+            "public_repo": True,
+        },
+    }
 
     try:
         resp = requests.patch(url, json=payload, headers=_headers(), timeout=30)

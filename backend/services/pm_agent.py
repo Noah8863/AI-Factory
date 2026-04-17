@@ -1008,4 +1008,33 @@ def generate_readme(
 
     readme_md = response.content[0].text
     readme_md = _correct_script_readme_commands(readme_md, script_entrypoint)
+
+    # Inject a live-preview screenshot section for deployed frontend projects.
+    # WordPress mshots fetches on-demand so the screenshot is captured after
+    # Netlify finishes its build — not at README-commit time.
+    if live_url and tags.get("has_frontend"):
+        import urllib.parse as _urlparse
+        encoded = _urlparse.quote(live_url, safe="")
+        screenshot_url = (
+            f"https://s0.wordpress.com/mshots/v1/{encoded}"
+            "?w=1200&h=630"
+        )
+        screenshot_block = (
+            f"\n> 📸 *Screenshot is captured automatically after the site finishes its first build.*\n\n"
+            f"![{project_name} — Live Preview]({screenshot_url})\n"
+        )
+        # Insert the screenshot block right before the first `##` section so
+        # it appears after the title/intro but before the feature breakdown.
+        lines = readme_md.split("\n")
+        insert_at = None
+        for i, line in enumerate(lines):
+            if line.startswith("## "):
+                insert_at = i
+                break
+        if insert_at is not None:
+            lines.insert(insert_at, screenshot_block)
+            readme_md = "\n".join(lines)
+        else:
+            readme_md = readme_md.rstrip() + f"\n\n## Preview\n\n{screenshot_block}"
+
     return readme_md
