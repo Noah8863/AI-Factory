@@ -49,7 +49,7 @@ async def run_backend_task(
 
     Raises on unrecoverable errors (caller marks ticket as failed).
     """
-    system_msg = BACKEND_SYSTEM_PROMPT.format(tech_stack=_TECH_STACK)
+    system_msg = BACKEND_SYSTEM_PROMPT.replace("__TECH_STACK__", _TECH_STACK)
 
     logger.info(
         "Calling backend agent for ticket %s: %s",

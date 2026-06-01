@@ -123,7 +123,7 @@ async def run_script_task(
     Call the Script Developer agent with a ticket, parse its JSON output,
     write generated files directly to main on GitHub, and return a result dict.
     """
-    system_msg = SCRIPT_SYSTEM_PROMPT.format(tech_stack=_TECH_STACK)
+    system_msg = SCRIPT_SYSTEM_PROMPT.replace("__TECH_STACK__", _TECH_STACK)
 
     logger.info(
         "Calling script agent for ticket %s: %s",

@@ -74,7 +74,7 @@ async def run_frontend_task(
 
     Raises on unrecoverable errors (caller marks ticket as failed).
     """
-    system_msg = FRONTEND_SYSTEM_PROMPT.format(tech_stack=_TECH_STACK)
+    system_msg = FRONTEND_SYSTEM_PROMPT.replace("__TECH_STACK__", _TECH_STACK)
 
     logger.info(
         "Calling frontend agent for ticket %s: %s",
